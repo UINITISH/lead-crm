@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Core Realty CRM</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e6e9ef;
+    --muted:#8b93a7; --accent:#4c8dff; --good:#2fbf71; --warn:#e2b93b; --bad:#e05260;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+  header { padding:16px 24px; border-bottom:1px solid var(--line);
+           display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { font-size:16px; margin:0; font-weight:600; letter-spacing:.2px; }
+  .grow { flex:1; }
+  main { padding:24px; max-width:1400px; margin:0 auto; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
+  .card .n { font-size:26px; font-weight:600; }
+  .card .l { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.6px; }
+  table { width:100%; border-collapse:collapse; background:var(--panel);
+          border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); font-size:13px; }
+  th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
+  tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#1c2029; cursor:pointer; }
+  input,select,button { background:#11141a; color:var(--text); border:1px solid var(--line);
+                        border-radius:6px; padding:7px 10px; font-size:13px; font-family:inherit; }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:500; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px;
+          border:1px solid var(--line); background:#11141a; }
+  .src-meta   { color:#8ab4ff; border-color:#2c4270; }
+  .src-google { color:#f9c74f; border-color:#6b5720; }
+  .src-website{ color:#8be9c0; border-color:#255744; }
+  .st-new{color:var(--accent)} .st-contacted{color:var(--warn)}
+  .st-site_visit{color:#c78bf0} .st-negotiation{color:#f0a35e}
+  .st-closed{color:var(--good)} .st-dropped{color:var(--muted)}
+  .muted { color:var(--muted); }
+  .drawer { position:fixed; top:0; right:0; width:min(520px,100%); height:100%;
+            background:var(--panel); border-left:1px solid var(--line);
+            padding:24px; overflow:auto; box-shadow:-20px 0 60px rgba(0,0,0,.5); }
+  .kv { display:grid; grid-template-columns:150px 1fr; gap:6px 12px; margin:16px 0; font-size:13px; }
+  .kv dt { color:var(--muted); }
+  .kv dd { margin:0; word-break:break-word; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted);
+       margin:24px 0 8px; font-weight:600; }
+  .event { border-left:2px solid var(--line); padding:6px 0 6px 12px; margin-bottom:2px; font-size:12px; }
+  .empty { padding:48px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+const STATUSES = ['new','contacted','site_visit','negotiation','closed','dropped'];
+
+let TOKEN = '';
+
+/**
+ * Running locally on the development default? Take the token from the server
+ * so nobody has to type it. Anywhere else, ask once and remember for the tab.
+ */
+async function resolveToken() {
+  const saved = sessionStorage.getItem('crm_token');
+  if (saved) { TOKEN = saved; return; }
+  try {
+    const r = await fetch('/api/admin/dev-token');
+    if (r.ok) {
+      const j = await r.json();
+      if (j.token) { TOKEN = j.token; sessionStorage.setItem('crm_token', TOKEN); return; }
+    }
+  } catch { /* fall through to the prompt */ }
+  TOKEN = window.prompt('Admin token') || '';
+  if (TOKEN) sessionStorage.setItem('crm_token', TOKEN);
+}
+
+function token() { return TOKEN; }
+
+async function api(path, opts = {}) {
+  const r = await fetch('/api/admin' + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token(), ...(opts.headers||{}) },
+  });
+  if (r.status === 401) { sessionStorage.removeItem('crm_token'); throw new Error('Unauthorized — reload and re-enter the token'); }
+  return r.json();
+}
+
+function fmt(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' });
+}
+
+function App() {
+  const [leads, setLeads] = useState([]);
+  const [report, setReport] = useState([]);
+  const [filters, setFilters] = useState({ source:'', status:'', q:'' });
+  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams(Object.entries(filters).filter(([,v]) => v)).toString();
+      const [l, rep] = await Promise.all([ api('/leads?' + qs), api('/report/source') ]);
+      setLeads(l.leads || []);
+      setReport(rep.rows || []);
+      setError(null);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  }, [filters]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const total = leads.length;
+  const bySource = (s) => leads.filter(l => l.source === s).length;
+  const contacted = leads.filter(l => l.status !== 'new').length;
+
+  async function open(id) {
+    const r = await api('/leads/' + id);
+    setSelected(r.lead);
+  }
+
+  async function setStatus(id, status) {
+    await api(`/leads/${id}/status`, { method:'PATCH', body: JSON.stringify({ status, actor:'admin' }) });
+    await load();
+    if (selected?.id === id) open(id);
+  }
+
+  return (
+    <React.Fragment>
+      <header>
+        <h1>Core Realty CRM <span className="muted" style={{fontWeight:400}}>· Phase 1</span></h1>
+        <div className="grow" />
+        <input placeholder="Search name / phone / email" value={filters.q}
+               onChange={e => setFilters(f => ({...f, q:e.target.value}))} style={{width:220}} />
+        <select value={filters.source} onChange={e => setFilters(f => ({...f, source:e.target.value}))}>
+          <option value="">All sources</option>
+          <option value="meta">Meta</option>
+          <option value="google">Google</option>
+          <option value="website">Website</option>
+        </select>
+        <select value={filters.status} onChange={e => setFilters(f => ({...f, status:e.target.value}))}>
+          <option value="">All statuses</option>
+          {STATUSES.map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
+        </select>
+        <button onClick={load}>Refresh</button>
+        <button className="primary"
+                onClick={() => window.open('/api/admin/export.csv?token=' + encodeURIComponent(token()))}>
+          Export CSV
+        </button>
+      </header>
+
+      <main>
+        {error && <div className="card" style={{borderColor:'var(--bad)', color:'var(--bad)', marginBottom:16}}>{error}</div>}
+
+        <div className="cards">
+          <div className="card"><div className="n">{total}</div><div className="l">Unique leads</div></div>
+          <div className="card"><div className="n" style={{color:'#8ab4ff'}}>{bySource('meta')}</div><div className="l">Meta</div></div>
+          <div className="card"><div className="n" style={{color:'#f9c74f'}}>{bySource('google')}</div><div className="l">Google</div></div>
+          <div className="card"><div className="n" style={{color:'#8be9c0'}}>{bySource('website')}</div><div className="l">Website</div></div>
+          <div className="card"><div className="n">{contacted}</div><div className="l">Worked</div></div>
+        </div>
+
+        <h2>By campaign</h2>
+        <table>
+          <thead><tr>
+            <th>Source</th><th>Campaign</th><th>Unique</th><th>Gross</th>
+            <th>Worked</th><th>Site visits</th><th>Closed</th>
+          </tr></thead>
+          <tbody>
+            {report.map((r,i) => (
+              <tr key={i}>
+                <td><span className={'pill src-' + r.source}>{r.source}</span></td>
+                <td>{r.campaign}</td>
+                <td>{r.unique_leads}</td>
+                <td className="muted">{r.gross_leads}</td>
+                <td>{r.contacted_plus}</td>
+                <td>{r.site_visits}</td>
+                <td>{r.closed}</td>
+              </tr>
+            ))}
+            {!report.length && <tr><td colSpan={7} className="empty">No data yet.</td></tr>}
+          </tbody>
+        </table>
+
+        <h2>Leads</h2>
+        <table>
+          <thead><tr>
+            <th>Received</th><th>Source</th><th>Campaign</th><th>Name</th>
+            <th>Phone</th><th>Budget</th><th>Status</th>
+          </tr></thead>
+          <tbody>
+            {leads.map(l => (
+              <tr key={l.id} onClick={() => open(l.id)}>
+                <td className="muted">{fmt(l.created_at)}</td>
+                <td><span className={'pill src-' + l.source}>{l.source}</span></td>
+                <td className="muted">{l.campaign_name || l.utm_campaign || '—'}</td>
+                <td>{l.full_name || '—'}</td>
+                <td>{l.phone_e164}</td>
+                <td className="muted">{l.budget_range || '—'}</td>
+                <td className={'st-' + l.status}>{l.status.replace('_',' ')}</td>
+              </tr>
+            ))}
+            {!leads.length && !loading && <tr><td colSpan={7} className="empty">No leads match these filters.</td></tr>}
+            {loading && <tr><td colSpan={7} className="empty">Loading…</td></tr>}
+          </tbody>
+        </table>
+      </main>
+
+      {selected && (
+        <div className="drawer" onClick={e => e.stopPropagation()}>
+          <div style={{display:'flex',alignItems:'center'}}>
+            <h1 style={{margin:0}}>{selected.full_name || 'Unnamed lead'}</h1>
+            <div className="grow" />
+            <button onClick={() => setSelected(null)}>Close</button>
+          </div>
+
+          <div style={{marginTop:16, display:'flex', gap:8, flexWrap:'wrap'}}>
+            {STATUSES.map(s => (
+              <button key={s}
+                      className={selected.status === s ? 'primary' : ''}
+                      onClick={() => setStatus(selected.id, s)}>
+                {s.replace('_',' ')}
+              </button>
+            ))}
+          </div>
+
+          <h2>Contact</h2>
+          <dl className="kv">
+            <dt>Phone</dt><dd><a href={'tel:' + selected.phone_e164} style={{color:'var(--accent)'}}>{selected.phone_e164}</a></dd>
+            <dt>Email</dt><dd>{selected.email || '—'}</dd>
+            <dt>Budget</dt><dd>{selected.budget_range || '—'}</dd>
+            <dt>Timeline</dt><dd>{selected.timeline || '—'}</dd>
+          </dl>
+
+          <h2>Attribution</h2>
+          <dl className="kv">
+            <dt>Source</dt><dd><span className={'pill src-' + selected.source}>{selected.source}</span></dd>
+            <dt>Campaign</dt><dd>{selected.campaign_name || '—'} <span className="muted">{selected.campaign_id || ''}</span></dd>
+            <dt>Ad set / group</dt><dd>{selected.adset_name || selected.adset_id || '—'}</dd>
+            <dt>Ad / creative</dt><dd>{selected.ad_name || selected.ad_id || '—'}</dd>
+            <dt>utm_source</dt><dd>{selected.utm_source || '—'}</dd>
+            <dt>utm_medium</dt><dd>{selected.utm_medium || '—'}</dd>
+            <dt>utm_campaign</dt><dd>{selected.utm_campaign || '—'}</dd>
+            <dt>gclid</dt><dd className="muted">{selected.gclid || '—'}</dd>
+            <dt>Landing page</dt><dd className="muted">{selected.landing_page || '—'}</dd>
+            <dt>Referrer</dt><dd className="muted">{selected.referrer || '—'}</dd>
+            <dt>First touch</dt><dd className="muted">{selected.first_touch ? JSON.stringify(selected.first_touch) : '—'}</dd>
+          </dl>
+
+          <h2>Lifecycle</h2>
+          {(selected.events || []).map(ev => (
+            <div className="event" key={ev.id}>
+              <span className="muted">{fmt(ev.created_at)}</span> · {ev.event_type}
+              {ev.to_status ? ` → ${ev.to_status}` : ''}
+              {ev.note ? <div className="muted">{ev.note}</div> : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </React.Fragment>
+  );
+}
+
+resolveToken().then(() => {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+});
+</script>
+</body>
+</html>
