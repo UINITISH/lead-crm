@@ -1,4 +1,4 @@
-# Spec review — Core Realty CRM Phase 1
+# Spec review — Core Value Realty Phase 1
 
 Read this before you brief the devs. The build is done and passing, but six
 things in the spec would have cost you the client relationship if shipped as
@@ -85,14 +85,14 @@ parallel because reviewers need the endpoint publicly live on HTTPS first.
 
 - Get the Meta webhook endpoint deployed on a real HTTPS domain in **week 1**,
   before anything else. Submit for review the same day.
-- Tell Core Realty 4–5 weeks now. Promising 3 and delivering in 5 costs you more
+- Tell Core Value Realty 4–5 weeks now. Promising 3 and delivering in 5 costs you more
   credibility than promising 5 and delivering in 4.
 
 ## 6. "Owner dashboard / analytics — out of scope" contradicts the objective
 
 You wrote that the project exists to prove lead delivery to the client, then
 deferred every reporting surface to Phase 2. If Phase 1 ships as specified, you
-have leads in a database and still nothing to put in front of Core Realty.
+have leads in a database and still nothing to put in front of Core Value Realty.
 
 **Fixed, cheaply.** A source/campaign breakdown and a CSV export are included.
 That's a few hours of work, not a phase. Full analytics can still wait.
@@ -124,7 +124,7 @@ it. Go in with eyes open about what you just signed up for:
 - Backups. `pg_dump` nightly to object storage, and **test a restore once**.
   An untested backup is not a backup.
 - Data protection. You are now processing personal data of Indian residents
-  under the DPDP Act 2023 on behalf of Core Realty. Get a written data
+  under the DPDP Act 2023 on behalf of Core Value Realty. Get a written data
   processing clause into the retainer. It's their liability primarily, but you
   will be the one blamed and the one with the database.
 - Exit. When this client leaves, who keeps the CRM? Decide now and put it in

@@ -1,0 +1,987 @@
+[
+  {
+    "name": "BIRLA EVARA",
+    "area": "Sarjapur",
+    "location": "Kodathi/Gattahalli area sarjapur Road",
+    "details": "30acres land,13 towers ,1600 units  2B+G25",
+    "possession": "2030",
+    "unit_types": [
+      {
+        "configuration": "1BHK",
+        "dimension": "458sqft",
+        "price_range": "71lakh-76lakh"
+      },
+      {
+        "configuration": "2BHK",
+        "dimension": "825sqft",
+        "price_range": "1.41cr-1.50cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1085-1093sqft",
+        "price_range": "1.85cr-1.98cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1229-1231sqft",
+        "price_range": "2.10cr-2.22cr"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "1653-1681sqft",
+        "price_range": "2.93cr-3.16cr"
+      }
+    ]
+  },
+  {
+    "name": "GODREJ LAKESIDE ORCHARDS",
+    "area": "Sarjapur",
+    "location": "kodathi/sarjapur Road East",
+    "details": "12 acres land 80% open space G+B+24 698 units",
+    "possession": "Sept 2030",
+    "unit_types": [
+      {
+        "configuration": "3BHK",
+        "dimension": "1580-1790",
+        "price_range": "1.7cr-2.3cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1944-2089",
+        "price_range": "2.4-2.8cr"
+      },
+      {
+        "configuration": "3.5BHK",
+        "dimension": "2257 sqft",
+        "price_range": "2.76cr"
+      },
+      {
+        "configuration": "4.5BHK",
+        "dimension": "2678 sqft",
+        "price_range": "3.39cr"
+      }
+    ]
+  },
+  {
+    "name": "NAMBIAR DISTRICT 25",
+    "area": "Sarjapur",
+    "location": "Muthanallur Cross,Off Sarjapur Road",
+    "details": "63 Acres land, 4B+32/33, 796 units",
+    "possession": "Feb 2030",
+    "unit_types": [
+      {
+        "configuration": "2 BHK",
+        "dimension": "1245 sqft",
+        "price_range": "Rs. 1.67 Crore to Rs. 1.73 Crore Onwards"
+      },
+      {
+        "configuration": "3 BHK + 2T",
+        "dimension": "1454 sqft",
+        "price_range": "Rs. 1.95 Crore to Rs. 2.05 Crore Onwards"
+      },
+      {
+        "configuration": "3 BHK + 3T",
+        "dimension": "1696 sqft",
+        "price_range": "Rs. 2.27 Crore to Rs. 2.4 Crore Onwards"
+      },
+      {
+        "configuration": "4.5 BHK + 4T",
+        "dimension": "2996 sqft",
+        "price_range": "Rs. 4.09 Crore to Rs. 4.27 Crore Onwards"
+      }
+    ]
+  },
+  {
+    "name": "ASSETZ TREES AND TANDEM",
+    "area": "Sarjapur",
+    "location": "kodathi Right off sarjapur",
+    "details": "Land 7 acres open space 90% B+G=22 floors 364 units",
+    "possession": "Aug 2029",
+    "unit_types": [
+      {
+        "configuration": "3BHK",
+        "dimension": "1826-1885",
+        "price_range": "2.27cr"
+      }
+    ]
+  },
+  {
+    "name": "ADARSH TROPICA",
+    "area": "Sarjapur",
+    "location": "Choodasandra chikkanayakanahalli just off sarjapur Road",
+    "details": "13 Acres land  B+G 13 floors 694 units",
+    "possession": "2028",
+    "unit_types": [
+      {
+        "configuration": "2.5 BHk  3BHk",
+        "dimension": "1385-1395-/1585--1610",
+        "price_range": "1.55cr-1.75cr"
+      },
+      {
+        "configuration": "4,5 BHK - 4.5BHK",
+        "dimension": "2790-3210",
+        "price_range": "3.07cr 3.50cr"
+      }
+    ]
+  },
+  {
+    "name": "ADARSH LUMINA",
+    "area": "Sarjapur",
+    "location": "Sarjapur road near Gattahalli/Halanayakanahalli",
+    "details": "8.7 Acres land,5 towers,440 units,1B+G+4",
+    "possession": "Mar 2028",
+    "unit_types": [
+      {
+        "configuration": "2.5 BHK",
+        "dimension": "1415-1490sqft",
+        "price_range": "1.4cr"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "1785-1850sqft",
+        "price_range": "1.8cr"
+      },
+      {
+        "configuration": "2BHK",
+        "dimension": "1150sqft",
+        "price_range": "1.38cr-2.89cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1900sqft-2000",
+        "price_range": "2.29cr-2.35cr"
+      },
+      {
+        "configuration": "3.5BHK",
+        "dimension": "2000sqft",
+        "price_range": "2.35cr+"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "2400sqft-2600",
+        "price_range": null
+      }
+    ]
+  },
+  {
+    "name": "LODHA SARJAPUR",
+    "area": "Sarjapur",
+    "location": "Sarjapur road near Sampurna gate area",
+    "details": "19 Acres land,11 towers,650 units,2B+G+30",
+    "possession": "Dec 2029",
+    "unit_types": [
+      {
+        "configuration": "3BHK",
+        "dimension": "1500sqft",
+        "price_range": "1.79cr"
+      },
+      {
+        "configuration": "3BHK lux",
+        "dimension": "1800sqft",
+        "price_range": "2.19cr"
+      },
+      {
+        "configuration": "3.5BHK",
+        "dimension": "2200sqft",
+        "price_range": "2.79cr"
+      }
+    ]
+  },
+  {
+    "name": "LODHA HAVEN",
+    "area": "Sarjapur",
+    "location": "Silver country road in HSR Layout Extention",
+    "details": "10 Acres land,7 tower,600 units,2B+G+28",
+    "possession": "Dec 2029",
+    "unit_types": [
+      {
+        "configuration": "3 BHK",
+        "dimension": "1400-1550sqft",
+        "price_range": "2.3cr"
+      },
+      {
+        "configuration": "3.5 BHK",
+        "dimension": "1598sqft",
+        "price_range": "3.3cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "2150sqft",
+        "price_range": "4.7cr"
+      }
+    ]
+  },
+  {
+    "name": "ADARSH WELKIN PARK, PH2",
+    "area": "Sarjapur",
+    "location": "Choodasandra Off Sarjapur Road",
+    "details": "51 Acres Land, 8 tower, 832 units, G+25",
+    "possession": "Dec 2028",
+    "unit_types": [
+      {
+        "configuration": "3 BHK Smart",
+        "dimension": "1868 sqft",
+        "price_range": "1.73cr"
+      },
+      {
+        "configuration": "3 BHK Super Premium",
+        "dimension": "1906 sqft",
+        "price_range": "1.84cr"
+      }
+    ]
+  },
+  {
+    "name": "ASSETZ REN AND RIE",
+    "area": "Sarjapur",
+    "location": "Gattahalli, Off Sarjapur Road",
+    "details": "3.79 Acres of land, B +G+ 13 , 218 units",
+    "possession": "2029",
+    "unit_types": [
+      {
+        "configuration": "3bhk 3T",
+        "dimension": "1796sft",
+        "price_range": "1.85cr"
+      },
+      {
+        "configuration": "3bhk 3T",
+        "dimension": "1821sft",
+        "price_range": "1.95cr"
+      }
+    ]
+  },
+  {
+    "name": "JRC WILDWOODS",
+    "area": "Sarjapur",
+    "location": "Gattahalli/Rayasandra area sarjapur road",
+    "details": "12acres land 7towers ,370 units ,B+G+4",
+    "possession": "Mar 2026",
+    "unit_types": [
+      {
+        "configuration": "2BHK",
+        "dimension": "1460sqft-1575",
+        "price_range": "1.5cr-1.9cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "2094sqft-2665",
+        "price_range": "1.9cr-3cr"
+      }
+    ]
+  },
+  {
+    "name": "SOBHA SCARLET",
+    "area": "Sarjapur",
+    "location": null,
+    "details": null,
+    "possession": null,
+    "unit_types": []
+  },
+  {
+    "name": "PRESTIGE Evergreen Phase 2 (Prestige Raintree Park - Phase1 only 4 &5 bhk)",
+    "area": "Whitefield-Kadugodi",
+    "location": "Whitefeid Main road,opposite Varthur lake off and metro station (kadugodi metro station)",
+    "details": "21acres land ,18 towers ,2000 units,2B+G19 floors",
+    "possession": "Dec 2029",
+    "unit_types": [
+      {
+        "configuration": "1BHK",
+        "dimension": "650sqft-700",
+        "price_range": "1cr-1.1cr"
+      },
+      {
+        "configuration": "2BHK",
+        "dimension": "1200 sqft",
+        "price_range": "2.0cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1500sqft-2050sqft",
+        "price_range": "2.55cr-3.45cr"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "2300sqft-2500sqft",
+        "price_range": "3.85cr-4.25cr"
+      }
+    ]
+  },
+  {
+    "name": "SUMADHURA CAPITOL RESIDENCE",
+    "area": "Whitefield-Kadugodi",
+    "location": "Whitefield ,Near Hope farm junction and kadugodi",
+    "details": "4.1acres land ,Multiple towers,units 405,3B+G+15",
+    "possession": "Dec 2027",
+    "unit_types": [
+      {
+        "configuration": "3BHK",
+        "dimension": "1635sqft-1890",
+        "price_range": "2.28cr"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "2100sqft-2150",
+        "price_range": "2.9cr-3.3cr"
+      }
+    ]
+  },
+  {
+    "name": "SBR One Residency",
+    "area": "Whitefield-Kadugodi",
+    "location": "whitefield, Hope farm junction on Channasandra Road",
+    "details": "12acres land multiple towers,units 930 ,G+20",
+    "possession": "Dec 2029",
+    "unit_types": [
+      {
+        "configuration": "2.5BHK",
+        "dimension": "1190sqft-1310",
+        "price_range": "1.69cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1620sqft-1750",
+        "price_range": "2.2cr"
+      }
+    ]
+  },
+  {
+    "name": "MAHINDRA BLOSSOM",
+    "area": "Whitefield-Kadugodi",
+    "location": "Whitefield main road near Hope farm junction,Channasandra metro station next to prestige park view",
+    "details": "8 Acres land,6 towers ,750 units,2B+G+30",
+    "possession": "Dec 2029",
+    "unit_types": [
+      {
+        "configuration": "2 BHK",
+        "dimension": "1200-1350 sqft",
+        "price_range": "1.8-1.9 cr"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "1725-1900 sqft",
+        "price_range": "2.6 cr"
+      },
+      {
+        "configuration": "3.5 BHK",
+        "dimension": "2100-2200 sqft",
+        "price_range": "3.1-3.2 cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "2350-2450 sqft",
+        "price_range": "3.5 cr"
+      }
+    ]
+  },
+  {
+    "name": "PAVANI MIRABILIA",
+    "area": "Whitefield-Kadugodi",
+    "location": "Seegehalli/Kadugodi near Whitefield-Hoskote road",
+    "details": "15.2 Acres land,10 towers,1900 units,2B+G+20",
+    "possession": "Dec 2026",
+    "unit_types": [
+      {
+        "configuration": "2 BHK",
+        "dimension": "1050-1230 sqft",
+        "price_range": "94 lac-1.3 cr"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "1335-1890 sqft",
+        "price_range": "1.3-2 cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "2250-2400 sqft",
+        "price_range": "2.3-2.7 cr"
+      }
+    ]
+  },
+  {
+    "name": "SUMADHURA SARANG",
+    "area": "Whitefield-Kadugodi",
+    "location": "Doddabanahalli,Whitefield-Hoskote road",
+    "details": "4.5 Acres land,2 towers,272 units,2B+G+22",
+    "possession": "Dec 2026",
+    "unit_types": [
+      {
+        "configuration": "2 BHK",
+        "dimension": "1225 sqft",
+        "price_range": "1.4-1.58 cr"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "1655-1920 sqft",
+        "price_range": "1.68-2.05 cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "2135-2580 sqft",
+        "price_range": "2.25-3.19 cr"
+      }
+    ]
+  },
+  {
+    "name": "SUMADHURA FOLIUM",
+    "area": "Whitefield-Kadugodi",
+    "location": "Ramagondanahalli Borewell Rd, Ramagondanahalli, Whitefield",
+    "details": "6.15 Acres, 400 Units\n, 2B + 19 Floors",
+    "possession": "Dec 2025 Onwards",
+    "unit_types": [
+      {
+        "configuration": "4 BHK",
+        "dimension": "2295 sqft",
+        "price_range": "3.70 cr"
+      }
+    ]
+  },
+  {
+    "name": "GOYAL ORCHID PLATINUM",
+    "area": "Whitefield-Kadugodi",
+    "location": "ITPB Main Road,",
+    "details": "3 Acres, G + 13 Floors,  250 Units",
+    "possession": "Jun 2028 Onwards",
+    "unit_types": [
+      {
+        "configuration": "3BHK",
+        "dimension": "1485 - 1860sft",
+        "price_range": "2cr -"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "2210sft",
+        "price_range": null
+      }
+    ]
+  },
+  {
+    "name": "ASSETZ 66 & SHIBUI",
+    "area": "Whitefield-Kadugodi",
+    "location": "ITPB Main Road,",
+    "details": "2 Acres, 2B + G + 12 Floors, 96 Units",
+    "possession": null,
+    "unit_types": [
+      {
+        "configuration": "3 BHK",
+        "dimension": "2154 sqft",
+        "price_range": "3.34 Cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "3044 sqft",
+        "price_range": "4.87 Cr"
+      }
+    ]
+  },
+  {
+    "name": "VASWANI STARLIGHT",
+    "area": "Whitefield-Kadugodi",
+    "location": "Ecc Road near itpl whitefield",
+    "details": "4.2 Acres 2B+G=22 floors 269 units",
+    "possession": "2028",
+    "unit_types": [
+      {
+        "configuration": "3BHK",
+        "dimension": "1970-2000-2025-2090-2140-",
+        "price_range": "2.81 to 3.05 cr"
+      },
+      {
+        "configuration": "4BHk",
+        "dimension": "2560-2730",
+        "price_range": "3.63-3.86"
+      }
+    ]
+  },
+  {
+    "name": "SOBHA NEOPOLIS",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "Panathur road ,Off marthahallli -outerring road",
+    "details": "26.5acres land,19towers,1875+units,B+G+18",
+    "possession": "Dec 2028",
+    "unit_types": [
+      {
+        "configuration": "1BHk",
+        "dimension": "660sqft",
+        "price_range": "0.87-090cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1611sqft-1915",
+        "price_range": "2.2cr-2.9cr"
+      },
+      {
+        "configuration": "3.5BHk",
+        "dimension": "2150sqft",
+        "price_range": "3.45cr"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "2333sqft",
+        "price_range": "3.9cr"
+      }
+    ]
+  },
+  {
+    "name": "ADARSH PARK HEIGHTS",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "Varthur road Balgere",
+    "details": "22 acres,6 tower,720 units,2B+G+29",
+    "possession": "2027",
+    "unit_types": [
+      {
+        "configuration": "2BHk",
+        "dimension": "1310sqft-1387",
+        "price_range": "1.55cr-1.65cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1800sqft-1860",
+        "price_range": "2.2cr-2.5cr"
+      }
+    ]
+  },
+  {
+    "name": "GOYAL ORCHID LIFE",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "Gunjur palya, Vartur road",
+    "details": "7.2 acre,5 tower,750 units,2B+G+25",
+    "possession": "Feb 2030",
+    "unit_types": [
+      {
+        "configuration": "2 BHK",
+        "dimension": "811 sqft",
+        "price_range": "92 lakh"
+      },
+      {
+        "configuration": "3 BHK 2T",
+        "dimension": "1464-1496",
+        "price_range": "1.71 - 1.75 cr"
+      },
+      {
+        "configuration": "3BHK 3T",
+        "dimension": "1723 - 1863sft",
+        "price_range": "2.02cr - 2.20cr"
+      }
+    ]
+  },
+  {
+    "name": "SANJEEVNI ADWAIT",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "Gunjur-Vartur road",
+    "details": "8.3 Acres,5 tower,668 units,2B+G+23",
+    "possession": "Aug 2027",
+    "unit_types": [
+      {
+        "configuration": "3 BHK",
+        "dimension": "1545-1950 sqft",
+        "price_range": "1.79 cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "2555 sqft",
+        "price_range": "2.93 cr"
+      }
+    ]
+  },
+  {
+    "name": "ABHEE AARIA",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "gunjur vartur road",
+    "details": "11 acres land 88% open space 1100 units 5 towers 2B+G+30 floors",
+    "possession": "2028",
+    "unit_types": [
+      {
+        "configuration": "1 BHk",
+        "dimension": "709-755",
+        "price_range": "73lacs to 78 lacs"
+      },
+      {
+        "configuration": "2BHk",
+        "dimension": "1320-1330",
+        "price_range": "1.36 cr to 1.37 cr"
+      },
+      {
+        "configuration": "3BHk",
+        "dimension": "1430-1750",
+        "price_range": "1.47 to 2.09cr"
+      },
+      {
+        "configuration": "3.5 BHk",
+        "dimension": "1990 - 2030",
+        "price_range": "2.5 cr"
+      },
+      {
+        "configuration": "4.5 BHk",
+        "dimension": "2500 sqft",
+        "price_range": "2.9cr"
+      }
+    ]
+  },
+  {
+    "name": "ABHEE CELESTIAL CITY",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "gunjur vartur Road",
+    "details": "4 .8 Acres  399 units 6 towers B+G+26 floors",
+    "possession": "2029",
+    "unit_types": [
+      {
+        "configuration": "2 BHk",
+        "dimension": "1345 sqft",
+        "price_range": "1.4cr"
+      },
+      {
+        "configuration": "3BHk",
+        "dimension": "1595-1680-1685-",
+        "price_range": "1.63 cr to 1.72cr"
+      },
+      {
+        "configuration": "3BHK",
+        "dimension": "1895-1950-1990",
+        "price_range": "1.92cr 2.01cr"
+      }
+    ]
+  },
+  {
+    "name": "DSR ADDRESS",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "kachamaranahalli thigala chowdadenahalli",
+    "details": "13.67 acres 84% open space 1372 units , 6 towers 2B+G+30 floors",
+    "possession": "2028",
+    "unit_types": [
+      {
+        "configuration": "2BHk",
+        "dimension": "1227 sqft",
+        "price_range": "1.37cr"
+      },
+      {
+        "configuration": "3BHk",
+        "dimension": "1561-1719",
+        "price_range": "1.80 to 1.96 cr"
+      },
+      {
+        "configuration": "3BHk",
+        "dimension": "1969-1978",
+        "price_range": "2.27 to 2.28cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "2362 sqft",
+        "price_range": "2.71cr"
+      }
+    ]
+  },
+  {
+    "name": "TRENDSQUARE AKINO",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "Silver Oaks Main Rd, Panathur Road",
+    "details": "4.7 Acres, 394 Units, 3B + G + 17 Floors",
+    "possession": "2028 onwards",
+    "unit_types": [
+      {
+        "configuration": "3 BHK 2T",
+        "dimension": "1550 to 1730",
+        "price_range": "1.72 to 1.92cr"
+      },
+      {
+        "configuration": "3 BHK 3T",
+        "dimension": "1980 to 2010",
+        "price_range": "2.19 to 2.23cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "1980 to 2010",
+        "price_range": "2.19 to 2.23cr"
+      }
+    ]
+  },
+  {
+    "name": "Mana Skanda The Right Life",
+    "area": "Varthur-Gunjur-Panathur",
+    "location": "varthur - sarjapur main road",
+    "details": "100 acres [ phase 1 - 31 acres ] 9 towers ,3B+G+34 floors , 683 units",
+    "possession": "2030",
+    "unit_types": [
+      {
+        "configuration": "2bhk",
+        "dimension": "1249sft",
+        "price_range": "1.6cr"
+      },
+      {
+        "configuration": "3bhk 2T",
+        "dimension": "1539 - 1590sft",
+        "price_range": "1.9cr"
+      },
+      {
+        "configuration": "3bhk 3T",
+        "dimension": "1661 - 1953sft",
+        "price_range": "2.1cr - 2.4cr"
+      },
+      {
+        "configuration": "3.5bhk",
+        "dimension": "2060 - 2244sft",
+        "price_range": "2.5cr - 2.8cr"
+      },
+      {
+        "configuration": "4bhk",
+        "dimension": "3300 - 4952sft",
+        "price_range": "5cr onwrds"
+      }
+    ]
+  },
+  {
+    "name": "CENTURY MIRAI",
+    "area": "Marthahalli-Kundanahalli-Itpl",
+    "location": "Kundanahalli junction , opp to shankar eye hospital ,Marathahalli",
+    "details": "14 Acres,5 tower,475 units,3B+G+13",
+    "possession": "Oct 2030",
+    "unit_types": [
+      {
+        "configuration": "2 BHK",
+        "dimension": "1375 sqft",
+        "price_range": "2.16 cr"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "1665-1990 sqft",
+        "price_range": "2.60-3.10 cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "3115 sqft",
+        "price_range": "4.85 cr"
+      }
+    ]
+  },
+  {
+    "name": "SUMADHURA EDITION",
+    "area": "Marthahalli-Kundanahalli-Itpl",
+    "location": "Borewell Road, Whitefield",
+    "details": "6.15 Acres 400 Units 2B + 19 Floors",
+    "possession": "Dec 2026",
+    "unit_types": [
+      {
+        "configuration": "3 BHK",
+        "dimension": "1615 sqft",
+        "price_range": "Rs. 2.30 Crore Onwards"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "1720 to 1755",
+        "price_range": "Rs. 2.35 Crore Onwards"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "1895 to 1970",
+        "price_range": "Rs. 2.77 Crore Onwards"
+      }
+    ]
+  },
+  {
+    "name": "SUMADHURA E119",
+    "area": "Marthahalli-Kundanahalli-Itpl",
+    "location": "Whitefield Hope Farm Junction, Bangalore East , Bangalore",
+    "details": "2 Acres  160 units 8 towers",
+    "possession": "Dec 2030",
+    "unit_types": [
+      {
+        "configuration": "3 BHK",
+        "dimension": "1650 sqft",
+        "price_range": "2.67 Cr"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "2045 sqft",
+        "price_range": "3.31 cr"
+      }
+    ]
+  },
+  {
+    "name": "TOTAL ENVIRONMENT RADICAL RHAPSODY",
+    "area": "Marthahalli-Kundanahalli-Itpl",
+    "location": "ITPL main road,Hoodi,Basavanna nagar,Whitefield",
+    "details": "34.5 Acres land , 1081 units , 7 blocks , G+28th floors",
+    "possession": "{May 2025 tower 2,3,4,6,7} {villa - 2026 } {tower 5 march 2027 }  {TOWER 8 OCT 2027 }",
+    "unit_types": [
+      {
+        "configuration": "3bhk",
+        "dimension": "2700 - 4389sft",
+        "price_range": "5.5cr - 9.5cr"
+      },
+      {
+        "configuration": "3bhk duplex",
+        "dimension": "4595sft",
+        "price_range": "11cr"
+      },
+      {
+        "configuration": "5bhk Penthouse",
+        "dimension": "5385 - 8023sft",
+        "price_range": "12 - 18cr"
+      },
+      {
+        "configuration": "4bhk villa",
+        "dimension": null,
+        "price_range": null
+      }
+    ]
+  },
+  {
+    "name": "PRIDE EUPHORA",
+    "area": "Kr Purambudigere",
+    "location": "KR Puram, Battarahalli",
+    "details": "2.5 acres, 212 Units, 2B + G + 18 Floors",
+    "possession": "Sept 2027 Onwards",
+    "unit_types": [
+      {
+        "configuration": "3bhk 2T",
+        "dimension": "1500 to 1541",
+        "price_range": "2cr"
+      },
+      {
+        "configuration": "3bhk 3T",
+        "dimension": "1693 to 1927sft",
+        "price_range": "2.15cr - 2.6cr"
+      },
+      {
+        "configuration": "4bhk",
+        "dimension": "2856 to 2982sft",
+        "price_range": "3.75 - 4cr"
+      }
+    ]
+  },
+  {
+    "name": "SATTVA SONG BIRD",
+    "area": "Kr Purambudigere",
+    "location": "Budigere cross , old madras road",
+    "details": "12 acres , 1400 units , 4 towers , 2B+G+31 floors",
+    "possession": "Dec 2028",
+    "unit_types": [
+      {
+        "configuration": "2bhk",
+        "dimension": "1280sft",
+        "price_range": "1.7cr"
+      },
+      {
+        "configuration": "2.5bhk",
+        "dimension": "1398sft",
+        "price_range": "1.85cr"
+      },
+      {
+        "configuration": "3bhk",
+        "dimension": "1733sft - 1813sft",
+        "price_range": "2.4cr - 2.6cr"
+      }
+    ]
+  },
+  {
+    "name": "GODREJ HOSKOTE",
+    "area": "Kr Purambudigere",
+    "location": "Budigere",
+    "details": "14acres , 1130 units ,",
+    "possession": "2030",
+    "unit_types": [
+      {
+        "configuration": "2bhk",
+        "dimension": "1050 - 1200sft",
+        "price_range": "1.15cr - 1.35cr"
+      },
+      {
+        "configuration": "3bhk",
+        "dimension": "1600 - 1750sft",
+        "price_range": "1.8cr - 2cr"
+      }
+    ]
+  },
+  {
+    "name": "SOBHA HOSKOTE",
+    "area": "Kr Purambudigere",
+    "location": "Budigere",
+    "details": "Total 300 acres { phase 1 48acres } , 18 towers ,3B+G+54 floors , 5400 appartment",
+    "possession": null,
+    "unit_types": []
+  },
+  {
+    "name": "ADARSH LAKEFRONT",
+    "area": "Bellandur-Hsr-Koramangala",
+    "location": "Behind RMZ Ecospace,",
+    "details": "5.5 Acres, 513 Units, 2B + G + 14 Floors",
+    "possession": "Ready to move",
+    "unit_types": [
+      {
+        "configuration": "2BHK",
+        "dimension": "1341 sqft",
+        "price_range": "Rs. 2.39 Crore Onwards"
+      },
+      {
+        "configuration": "3 BHK",
+        "dimension": "1915 to 2235",
+        "price_range": "Rs. 3.54 Crore to Rs. 4.30 Crore Onwards"
+      }
+    ]
+  },
+  {
+    "name": "ASSETZ MICROPOLIS",
+    "area": "Bellandur-Hsr-Koramangala",
+    "location": "Kudlu gate,Hosuru main road",
+    "details": "80 Acres,5 tower,704 units,B+G+23",
+    "possession": "Dec 2029",
+    "unit_types": [
+      {
+        "configuration": "3 BHK",
+        "dimension": "1900 sqft",
+        "price_range": "2.38-2.47 cr"
+      },
+      {
+        "configuration": "3 BHK Lux",
+        "dimension": "2164 sqft",
+        "price_range": "2.70-2.82 cr"
+      },
+      {
+        "configuration": "4 BHK",
+        "dimension": "2476 sqft",
+        "price_range": "3.09-3.25 cr"
+      }
+    ]
+  },
+  {
+    "name": "SOBHA INFINIA",
+    "area": "Bellandur-Hsr-Koramangala",
+    "location": "Kormangala 1st block just off hsr layout south east",
+    "details": "5 acres land 180 units 6 towers 2B+G+11 floors",
+    "possession": "2029",
+    "unit_types": [
+      {
+        "configuration": "3 BHK",
+        "dimension": "1922 to 1932",
+        "price_range": "4.17 to 5.86cr"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "3260 to 3264",
+        "price_range": "7.11cr"
+      }
+    ]
+  },
+  {
+    "name": "CENTURY REGALIA",
+    "area": "Bellandur-Hsr-Koramangala",
+    "location": "Indiranagar domlur road ,Near to KGAGolf course and HAL old airport road",
+    "details": "8.5acres ,2tower,345 units,2B+G+11F",
+    "possession": "Apr 2029",
+    "unit_types": [
+      {
+        "configuration": "3BHK",
+        "dimension": "2375sqft",
+        "price_range": "5.35cr"
+      },
+      {
+        "configuration": "4BHK",
+        "dimension": "2475sqft",
+        "price_range": "5.5cr-6.5cr"
+      },
+      {
+        "configuration": "4BHK luxury",
+        "dimension": "3870sqft-5380",
+        "price_range": "10cr-18.5cr+"
+      }
+    ]
+  }
+]

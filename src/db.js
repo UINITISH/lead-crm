@@ -83,3 +83,9 @@ export async function closeDb() {
   if (impl) await impl.close();
   impl = null;
 }
+
+/** 'postgres' or 'pglite' — used by the Settings page, never exposes credentials. */
+export async function getDbKind() {
+  if (!impl) await initDb();
+  return impl.kind;
+}

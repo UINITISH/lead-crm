@@ -1,0 +1,15 @@
+export const STATUSES = ['new', 'contacted', 'site_visit', 'negotiation', 'closed', 'dropped'];
+export const NEW = '__new__';
+
+export const NAV = [
+  { key: 'dashboard',  label: 'Dashboard',              icon: 'chart' },
+  { key: 'leads',      label: 'Leads',                  icon: 'users' },
+  { key: 'deals',      label: 'Deals',                  icon: 'briefcase' },
+  { key: 'developers', label: 'Developers & projects',  icon: 'building' },
+  { key: 'ingest',     label: 'Ingest log',             icon: 'inbox' },
+  { key: 'settings',   label: 'Settings',               icon: 'settings' },
+];
+
+export const DEAL_STAGES = ['negotiation', 'booked', 'closed_won', 'closed_lost'];
+export const DEAL_STAGE_LABELS = { negotiation: 'Negotiation', booked: 'Booked', closed_won: 'Closed won', closed_lost: 'Closed lost' };
+export const DEAL_ELIGIBLE_STATUSES = ['negotiation', 'closed'];

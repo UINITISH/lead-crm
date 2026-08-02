@@ -1,8 +1,12 @@
 node_modules/
+client/node_modules/
+client/vite.config.js.timestamp-*.mjs
+public_build_check/
 .env
 .env.*
 !.env.example
 .pgdata/
+.pgdata.broken-*/
 .pgdata-test/
 *.log
 .DS_Store

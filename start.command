@@ -1,12 +1,12 @@
 #!/bin/bash
-# Core Realty CRM — double-click this file to run it on localhost.
+# Core Value Realty — double-click this file to run it on localhost.
 # macOS opens .command files in Terminal automatically.
 # Stop the server with Ctrl+C, then close the Terminal window.
 
 cd "$(dirname "$0")" || exit 1
 
 echo ""
-echo "  Core Realty CRM — Phase 1"
+echo "  Core Value Realty — Phase 1"
 echo "  ─────────────────────────────────────────"
 echo ""
 

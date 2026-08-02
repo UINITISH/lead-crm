@@ -1,7 +1,7 @@
-# Core Realty CRM — Phase 1
+# Core Value Realty — Phase 1
 
 Multi-source lead capture with campaign-level attribution.
-Node 20+ · Express · PostgreSQL · React (CDN, no build step in Phase 1)
+Node 20+ · Express · PostgreSQL · React (Vite build, `client/`)
 
 **Read `SPEC-REVIEW.md` first.** It explains six deliberate departures from the
 original build spec and why each one would have cost you the client.
@@ -11,9 +11,10 @@ original build spec and why each one would have cost you the client.
 ## Run it in 60 seconds
 
 ```bash
-npm install
-cp .env.example .env       # leave DATABASE_URL blank to use PGlite locally
-npm start                  # -> http://localhost:3400
+npm install                 # also installs client/ dependencies (postinstall)
+cp .env.example .env        # leave DATABASE_URL blank to use PGlite locally
+npm run build                # compiles client/ -> public/ (do this once, and again after any frontend change)
+npm start                    # -> http://localhost:3400
 ```
 
 Leave `DATABASE_URL` empty and it runs on **PGlite** — real Postgres compiled to
@@ -25,6 +26,19 @@ Verify everything against the acceptance criteria:
 ```bash
 npm run test:e2e     # 36 checks, no ad accounts or Postgres required
 ```
+
+### Frontend development
+
+The UI lives in `client/` (React + Vite) and builds into `public/`, which
+`src/server.js` serves as static files — nothing to configure. Day to day:
+
+- Made a frontend change and just want to see it? `npm run build`, then
+  refresh the browser. No server restart needed.
+- Want live hot-reload while actively editing UI code? `npm run dev` runs the
+  Express API and the Vite dev server together (`http://localhost:5173`,
+  proxying `/api` to the backend on `3400`).
+- `npm start` alone always serves whatever was last built into `public/` — it
+  does not rebuild automatically.
 
 ---
 
@@ -124,7 +138,7 @@ Your original list, plus what the review added:
 
 ---
 
-## Explaining the numbers to Core Realty
+## Explaining the numbers to Core Value Realty
 
 You will be asked why Meta reports 300 and the CRM shows 274. Settle this in
 writing **before** the first report, not during it.
@@ -151,8 +165,8 @@ conversation instead of a lost account.
 - [ ] Nightly `pg_dump` to off-server storage — **and one tested restore**.
 - [ ] An uptime monitor on `/healthz` that pages a human.
 - [ ] `.env` in `.gitignore`. Confirm it isn't already in git history.
-- [ ] Data processing clause added to the Core Realty retainer (DPDP Act 2023).
-- [ ] Core Realty's privacy policy mentions advertising measurement cookies.
+- [ ] Data processing clause added to the Core Value Realty retainer (DPDP Act 2023).
+- [ ] Core Value Realty's privacy policy mentions advertising measurement cookies.
 
 ---
 
