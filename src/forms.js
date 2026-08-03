@@ -17,7 +17,8 @@ function genPublicId() {
   return crypto.randomBytes(6).toString('base64url'); // 8 URL-safe chars
 }
 
-const FIELD_TYPES = new Set(['text', 'email', 'textarea', 'budget', 'project']);
+const FIELD_TYPES = new Set(['text', 'email', 'textarea', 'budget', 'project', 'select', 'checkboxes']);
+const OPTION_TYPES = new Set(['select', 'checkboxes']);
 const CORE_KEYS = new Set(['first_name', 'last_name', 'email', 'budget', 'project', 'message']);
 
 export function defaultFields() {
@@ -49,7 +50,15 @@ export function sanitizeFields(input) {
     }
     if (seenKeys.has(key)) continue;
     seenKeys.add(key);
-    out.push({ key, label, type, required: Boolean(raw.required) });
+
+    const field = { key, label, type, required: Boolean(raw.required) };
+    if (OPTION_TYPES.has(type)) {
+      const options = Array.isArray(raw.options)
+        ? raw.options.map((o) => cleanText(o, 150)).filter(Boolean)
+        : [];
+      field.options = options.length ? options : ['Option 1', 'Option 2'];
+    }
+    out.push(field);
   }
   return out;
 }

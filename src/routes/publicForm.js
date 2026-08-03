@@ -99,6 +99,11 @@ function page({ title, body }) {
   .thanks h1 { font-size:19px; }
   .thanks p { color:#6b7280; font-size:14px; }
   .req { color:#d92d20; }
+  .chk-group { display:flex; flex-direction:column; gap:6px; margin-top:2px; }
+  .chk-opt { display:flex !important; align-items:center; gap:8px; font-size:14px; font-weight:400; margin:0 !important; }
+  .chk-opt input { width:auto; }
+  .preview-banner { background:#eaf1ff; color:#2f6fed; padding:8px 12px; border-radius:8px; font-size:12.5px;
+                    font-weight:600; margin-bottom:14px; text-align:center; }
 </style>
 </head>
 <body>
@@ -127,30 +132,54 @@ async function fieldHtml(form, field, values) {
         <option value="">Select…</option>
         ${await projectOptions(form, val)}
       </select>`;
+    case 'select':
+      return `<label>${esc(field.label)}${reqMark}</label><select name="${esc(field.key)}"${reqAttr}>
+        <option value="">Select…</option>
+        ${(field.options || []).map((o) => `<option value="${esc(o)}"${val === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}
+      </select>`;
+    case 'checkboxes': {
+      const selected = Array.isArray(val) ? val : (val ? [val] : []);
+      return `<label>${esc(field.label)}${reqMark}</label><div class="chk-group">
+        ${(field.options || []).map((o, i) => `<label class="chk-opt"><input type="checkbox" name="${esc(field.key)}" value="${esc(o)}"${selected.includes(o) ? ' checked' : ''} /> ${esc(o)}</label>`).join('')}
+      </div>`;
+    }
     case 'text':
     default:
       return `<label>${esc(field.label)}${reqMark}</label><input type="text" name="${esc(field.key)}"${reqAttr} value="${esc(val)}" />`;
   }
 }
 
-async function formBody(form, { error = null, values = {} } = {}) {
+async function formBody(form, { error = null, values = {}, preview = false } = {}) {
   const fields = Array.isArray(form.fields) ? form.fields : [];
   const rendered = [];
   for (const f of fields) rendered.push(await fieldHtml(form, f, values));
 
   return `
+${preview ? `<div class="preview-banner">Preview — this is what visitors will see. Nothing submitted here is saved.</div>` : ''}
 ${error ? `<div class="err">${esc(error)}</div>` : ''}
 <h1>${esc(form.name)}</h1>
-<form method="POST" action="/f/${esc(form.public_id)}/submit">
+<form ${preview ? 'onsubmit="return false"' : `method="POST" action="/f/${esc(form.public_id)}/submit"`}>
   <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" />
 
   ${rendered.join('\n')}
 
   <label>Phone <span class="req">*</span></label>
-  <input type="tel" name="phone" required value="${esc(values.phone)}" />
+  <input type="tel" name="phone"${preview ? '' : ' required'} value="${esc(values.phone)}" />
 
-  <button type="submit">Submit</button>
+  <button type="submit">${preview ? 'Submit (disabled in preview)' : 'Submit'}</button>
 </form>`;
+}
+
+/**
+ * Renders the exact same markup a real embedded form would show, for an
+ * unsaved draft — used by POST /api/admin/forms/preview so the Forms page
+ * can offer a live "Preview" button while building a form, before saving.
+ * Never touches the database.
+ */
+export async function renderFormPreview({ name, fields, developer_name }) {
+  const fakeForm = { public_id: 'preview', name: name || 'Untitled form', fields: fields || [], developer_name: developer_name || null };
+  const body = await formBody(fakeForm, { preview: true });
+  return page({ title: fakeForm.name, body });
 }
 
 publicFormRouter.get('/:public_id', async (req, res) => {
@@ -224,10 +253,16 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
 
   // Anything on the form that isn't one of the known core keys is a custom
   // field the admin added — capture it verbatim so nothing typed gets lost.
+  // A checked group of same-named checkboxes arrives as an array (or a bare
+  // string if only one box was ticked) — flatten either into one readable line.
   const CORE_KEYS = new Set(['first_name', 'last_name', 'email', 'budget', 'project', 'message']);
   const customAnswers = fields
     .filter((f) => !CORE_KEYS.has(f.key))
-    .map((f) => ({ label: f.label, value: cleanText(body[f.key], 500) }))
+    .map((f) => {
+      const raw = body[f.key];
+      const joined = Array.isArray(raw) ? raw.filter(Boolean).join(', ') : raw;
+      return { label: f.label, value: cleanText(joined, 500) };
+    })
     .filter((a) => a.value);
 
   const attr = extractAttribution(req.query || {});

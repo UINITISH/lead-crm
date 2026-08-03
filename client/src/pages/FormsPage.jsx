@@ -1,8 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Icon from '../components/Icon.jsx';
-import { api } from '../lib/api.js';
+import { api, token } from '../lib/api.js';
 
 const CLOSE_MS = 260; // matches the .side-panel transition duration in styles.css
+
+const FIELD_TYPE_LABELS = {
+  text: 'Text', email: 'Email', textarea: 'Paragraph',
+  select: 'Dropdown', checkboxes: 'Checkboxes',
+  budget: 'Budget (preset ranges)', project: 'Project (from your directory)',
+};
+// Types an admin can freely switch a CUSTOM field between. Core fields (first
+// name, email, budget, project, message) keep their fixed type — it's what
+// makes their answers map onto the right lead column.
+const CUSTOM_FIELD_TYPES = ['text', 'email', 'textarea', 'select', 'checkboxes'];
 
 const DEFAULT_FIELDS = () => ([
   { key: 'first_name', label: 'First name', type: 'text', required: true },
@@ -19,6 +29,14 @@ function newCustomField() {
 
 function embedUrl(publicId) {
   return window.location.origin + '/f/' + publicId;
+}
+
+/** Opens a rendered HTML string in a new tab via a blob URL — used for both live-draft and saved-form previews. */
+function openHtmlInNewTab(html) {
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** Shared shell for both side panels — slides in from the right, no dark backdrop, click-outside to dismiss. */
@@ -94,14 +112,60 @@ function EmbedPanel({ form, onClose }) {
   );
 }
 
-function FieldRow({ field, onChange, onRemove }) {
+/** Add/remove/edit the option list for a Dropdown or Checkboxes field. */
+function OptionsEditor({ options, onChange }) {
+  function setOption(i, value) {
+    onChange(options.map((o, idx) => (idx === i ? value : o)));
+  }
+  function removeOption(i) {
+    onChange(options.filter((_, idx) => idx !== i));
+  }
+  function addOption() {
+    onChange([...options, '']);
+  }
   return (
-    <div className="list-row" style={{ alignItems: 'flex-start', gap: 10 }}>
-      <div style={{ flex: 1 }}>
+    <div style={{ marginTop: 8, paddingLeft: 4, borderLeft: '2px solid var(--line)' }}>
+      <div className="muted" style={{ fontSize: 11, marginBottom: 6, paddingLeft: 8 }}>Options</div>
+      {options.map((o, i) => (
+        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, paddingLeft: 8 }}>
+          <input value={o} placeholder={`Option ${i + 1}`} onChange={(e) => setOption(i, e.target.value)} style={{ flex: 1 }} />
+          <button type="button" onClick={() => removeOption(i)} title="Remove option" style={{ padding: '4px 8px', color: 'var(--bad)' }}>
+            <Icon name="x" size={12} />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={addOption} style={{ marginLeft: 8, fontSize: 12, padding: '4px 8px' }}>
+        <Icon name="plus" size={11} /> Add option
+      </button>
+    </div>
+  );
+}
+
+function FieldRow({ field, onChange, onRemove }) {
+  const isCustom = field.key.startsWith('custom_');
+  const hasOptions = field.type === 'select' || field.type === 'checkboxes';
+
+  return (
+    <div className="list-row" style={{ alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ flex: 1, minWidth: 180 }}>
         <input value={field.label} placeholder="Field label"
                onChange={(e) => onChange({ ...field, label: e.target.value })}
                style={{ marginBottom: 4 }} />
-        <div className="muted" style={{ fontSize: 11, textTransform: 'capitalize' }}>{field.type.replace('_', ' ')} field</div>
+        {isCustom ? (
+          <select value={field.type} onChange={(e) => {
+            const type = e.target.value;
+            const next = { ...field, type };
+            if ((type === 'select' || type === 'checkboxes') && !next.options) next.options = ['Option 1', 'Option 2'];
+            onChange(next);
+          }} style={{ fontSize: 12, padding: '4px 6px' }}>
+            {CUSTOM_FIELD_TYPES.map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
+          </select>
+        ) : (
+          <div className="muted" style={{ fontSize: 11 }}>{FIELD_TYPE_LABELS[field.type] || field.type} field</div>
+        )}
+        {hasOptions && (
+          <OptionsEditor options={field.options || []} onChange={(options) => onChange({ ...field, options })} />
+        )}
       </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 400, fontSize: 12, marginTop: 8, whiteSpace: 'nowrap' }}>
         <input type="checkbox" checked={field.required} onChange={(e) => onChange({ ...field, required: e.target.checked })} />
@@ -114,11 +178,13 @@ function FieldRow({ field, onChange, onRemove }) {
   );
 }
 
-function NewFormPanel({ developers, onClose, onSaved }) {
-  const [name, setName] = useState('');
-  const [fields, setFields] = useState(DEFAULT_FIELDS);
-  const [developerName, setDeveloperName] = useState('');
+/** Used for both creating a new form (no `form` prop) and editing an existing one. */
+function FormBuilderPanel({ form, developers, onClose, onSaved }) {
+  const [name, setName] = useState(form?.name || '');
+  const [fields, setFields] = useState(form?.fields?.length ? form.fields : (form ? [] : DEFAULT_FIELDS()));
+  const [developerName, setDeveloperName] = useState(form?.developer_name || '');
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [err, setErr] = useState(null);
 
   function updateField(i, next) {
@@ -131,17 +197,38 @@ function NewFormPanel({ developers, onClose, onSaved }) {
     setFields((list) => [...list, newCustomField()]);
   }
 
+  function cleanedFields() {
+    return fields.map((f) => ({ ...f, label: f.label.trim() })).filter((f) => f.label);
+  }
+
+  async function preview() {
+    setPreviewing(true);
+    try {
+      const r = await fetch('/api/admin/forms/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
+        body: JSON.stringify({ name: name.trim() || 'Untitled form', fields: cleanedFields(), developer_name: developerName || null }),
+      });
+      const html = await r.text();
+      openHtmlInNewTab(html);
+    } catch (e) {
+      setErr('Could not build the preview: ' + e.message);
+    }
+    setPreviewing(false);
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
     setErr(null);
     try {
-      const cleanFields = fields.map((f) => ({ ...f, label: f.label.trim() })).filter((f) => f.label);
-      await api('/forms', {
-        method: 'POST',
-        body: JSON.stringify({ name: name.trim(), fields: cleanFields, developer_name: developerName || null }),
-      });
+      const payload = { name: name.trim(), fields: cleanedFields(), developer_name: developerName || null };
+      if (form) {
+        await api('/forms/' + form.id, { method: 'PATCH', body: JSON.stringify(payload) });
+      } else {
+        await api('/forms', { method: 'POST', body: JSON.stringify(payload) });
+      }
       onSaved();
     } catch (e2) {
       setErr(e2.message);
@@ -150,7 +237,7 @@ function NewFormPanel({ developers, onClose, onSaved }) {
   }
 
   return (
-    <SidePanel title="New lead form" onClose={onClose}>
+    <SidePanel title={form ? `Edit "${form.name}"` : 'New lead form'} onClose={onClose}>
       {(dismiss) => (
         <form onSubmit={submit}>
           {err && <div className="form-error" style={{ marginTop: 16 }}>{err}</div>}
@@ -164,7 +251,7 @@ function NewFormPanel({ developers, onClose, onSaved }) {
           <h2>Fields</h2>
           <p className="muted" style={{ marginTop: -8, marginBottom: 10, fontSize: 12 }}>
             Phone number is always collected — it's how leads get matched and de-duplicated. Everything else below is
-            yours to edit: rename, mark required, delete, or add your own.
+            yours to edit: rename, mark required, delete, or add your own (including dropdowns and checkboxes with your own options).
           </p>
           {fields.map((f, i) => (
             <FieldRow key={f.key} field={f} onChange={(next) => updateField(i, next)} onRemove={() => removeField(i)} />
@@ -187,9 +274,16 @@ function NewFormPanel({ developers, onClose, onSaved }) {
             </>
           )}
 
-          <div className="modal-actions">
-            <button type="button" onClick={dismiss}>Cancel</button>
-            <button type="submit" className="primary" disabled={saving || !name.trim()}>{saving ? 'Saving…' : 'Create form'}</button>
+          <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+            <button type="button" onClick={preview} disabled={previewing}>
+              {previewing ? 'Building preview…' : 'Preview'}
+            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={dismiss}>Cancel</button>
+              <button type="submit" className="primary" disabled={saving || !name.trim()}>
+                {saving ? 'Saving…' : form ? 'Save changes' : 'Create form'}
+              </button>
+            </div>
           </div>
         </form>
       )}
@@ -203,6 +297,7 @@ export default function FormsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [showNew, setShowNew] = useState(false);
+  const [editingForm, setEditingForm] = useState(null);
   const [embedFor, setEmbedFor] = useState(null);
 
   const load = useCallback(async () => {
@@ -227,6 +322,12 @@ export default function FormsPage() {
     if (!window.confirm(`Delete "${form.name}"? Its embed link will stop accepting submissions. Leads already captured stay in your Leads list.`)) return;
     await api('/forms/' + form.id, { method: 'DELETE' });
     load();
+  }
+
+  async function previewSaved(form) {
+    const r = await fetch(embedUrl(form.public_id));
+    const html = await r.text();
+    openHtmlInNewTab(html);
   }
 
   return (
@@ -268,7 +369,9 @@ export default function FormsPage() {
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
             Fields: Phone{(f.fields || []).length ? ', ' + f.fields.map((x) => x.label).join(', ') : ''}
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <button onClick={() => previewSaved(f)}>Preview</button>
+            <button onClick={() => setEditingForm(f)}><Icon name="edit-2" size={13} /> Edit</button>
             <button className="primary" onClick={() => setEmbedFor(f)}>Get embed code</button>
             <button onClick={() => toggleActive(f)}>{f.is_active ? 'Turn off' : 'Turn on'}</button>
             <button onClick={() => remove(f)} style={{ color: 'var(--bad)' }}>Delete</button>
@@ -277,8 +380,12 @@ export default function FormsPage() {
       ))}
 
       {showNew && (
-        <NewFormPanel developers={developers} onClose={() => setShowNew(false)}
-                      onSaved={() => { setShowNew(false); load(); }} />
+        <FormBuilderPanel developers={developers} onClose={() => setShowNew(false)}
+                           onSaved={() => { setShowNew(false); load(); }} />
+      )}
+      {editingForm && (
+        <FormBuilderPanel form={editingForm} developers={developers} onClose={() => setEditingForm(null)}
+                           onSaved={() => { setEditingForm(null); load(); }} />
       )}
       {embedFor && <EmbedPanel form={embedFor} onClose={() => setEmbedFor(null)} />}
     </>

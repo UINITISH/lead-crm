@@ -25,7 +25,8 @@ import {
 } from '../settings.js';
 import { listReps, createRep, updateRep } from '../reps.js';
 import { listTags, createTag, updateTag } from '../tags.js';
-import { listForms, createForm, updateForm, deleteForm } from '../forms.js';
+import { listForms, createForm, updateForm, deleteForm, sanitizeFields } from '../forms.js';
+import { renderFormPreview } from './publicForm.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
 
 const toNum = (v) => {
@@ -621,6 +622,22 @@ adminRouter.patch('/forms/:id', async (req, res) => {
   });
   if (!form) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, form });
+});
+
+/**
+ * Renders the exact public-form HTML for an unsaved draft, so the Forms page
+ * can offer a "Preview" button while building a form, before it's saved.
+ * Never touches the database — nothing here is persisted.
+ */
+adminRouter.post('/forms/preview', async (req, res) => {
+  const { name, fields, developer_name } = req.body || {};
+  const html = await renderFormPreview({
+    name: cleanText(name, 200),
+    fields: sanitizeFields(fields),
+    developer_name: developer_name ? cleanText(developer_name, 200) : null,
+  });
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 adminRouter.delete('/forms/:id', async (req, res) => {
