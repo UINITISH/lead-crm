@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { initDb, exec, closeDb } from './db.js';
 import { seedDeveloperDirectory } from './developers.js';
+import { seedDefaultTags } from './tags.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,6 +20,7 @@ export async function migrate() {
   // Reference data, not demo data — unlike scripts/seed.js this always runs
   // so the manual lead entry form has a developer/project list out of the box.
   await seedDeveloperDirectory();
+  await seedDefaultTags();
 }
 
 // pathToFileURL, not string concatenation — a space in the path (e.g. anything

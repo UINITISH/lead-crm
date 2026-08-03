@@ -19,6 +19,12 @@ export default function SettingsPage() {
   const [newRep, setNewRep] = useState('');
   const [savingRep, setSavingRep] = useState(false);
 
+  const [tags, setTags] = useState([]);
+  const [newTag, setNewTag] = useState('');
+  const [newTagColor, setNewTagColor] = useState('gray');
+  const [savingTag, setSavingTag] = useState(false);
+  const TAG_COLORS = ['orange', 'blue', 'gray', 'red', 'green', 'purple'];
+
   const [wiping, setWiping] = useState(false);
   const [reseeding, setReseeding] = useState(false);
   const [dataMsg, setDataMsg] = useState(null);
@@ -26,8 +32,8 @@ export default function SettingsPage() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [i, s, d, r] = await Promise.all([
-        api('/integration-status'), api('/settings'), api('/data-stats'), api('/reps'),
+      const [i, s, d, r, t] = await Promise.all([
+        api('/integration-status'), api('/settings'), api('/data-stats'), api('/reps'), api('/tags'),
       ]);
       setIntegrations(i.integrations);
       setSettings(s.settings);
@@ -35,6 +41,7 @@ export default function SettingsPage() {
       setDedupeDays(String(s.settings.dedupe_window_days ?? '30'));
       setStats(d.stats);
       setReps(r.reps || []);
+      setTags(t.tags || []);
       setLoadError(null);
     } catch (e) { setLoadError(e.message); }
     setLoading(false);
@@ -79,6 +86,37 @@ export default function SettingsPage() {
     try {
       await api('/reps/' + rep.id, { method: 'PATCH', body: JSON.stringify({ is_active: !rep.is_active }) });
       setReps(reps.map(r => r.id === rep.id ? { ...r, is_active: !rep.is_active } : r));
+    } catch (e) { setLoadError(e.message); }
+  }
+
+  async function addTag(e) {
+    e.preventDefault();
+    if (!newTag.trim()) return;
+    setSavingTag(true);
+    try {
+      await api('/tags', { method: 'POST', body: JSON.stringify({ name: newTag.trim(), color: newTagColor }) });
+      setNewTag('');
+      setNewTagColor('gray');
+      const t = await api('/tags');
+      setTags(t.tags || []);
+      window.dispatchEvent(new Event('crm-settings-changed'));
+    } catch (e) { setLoadError(e.message); }
+    setSavingTag(false);
+  }
+
+  async function toggleTag(tag) {
+    try {
+      await api('/tags/' + tag.id, { method: 'PATCH', body: JSON.stringify({ is_active: !tag.is_active }) });
+      setTags(tags.map(t => t.id === tag.id ? { ...t, is_active: !tag.is_active } : t));
+      window.dispatchEvent(new Event('crm-settings-changed'));
+    } catch (e) { setLoadError(e.message); }
+  }
+
+  async function recolorTag(tag, color) {
+    try {
+      await api('/tags/' + tag.id, { method: 'PATCH', body: JSON.stringify({ color }) });
+      setTags(tags.map(t => t.id === tag.id ? { ...t, color } : t));
+      window.dispatchEvent(new Event('crm-settings-changed'));
     } catch (e) { setLoadError(e.message); }
   }
 
@@ -202,6 +240,41 @@ export default function SettingsPage() {
         <form onSubmit={addRep} style={{ display: 'flex', gap: 8 }}>
           <input value={newRep} onChange={e => setNewRep(e.target.value)} placeholder="Rep name" style={{ flex: 1 }} />
           <button className="primary" type="submit" disabled={savingRep || !newRep.trim()}>Add rep</button>
+        </form>
+      </div>
+
+      <h2>Lead tags</h2>
+      <div className="card" style={{ marginBottom: 24 }}>
+        <p className="muted" style={{ margin: '0 0 12px' }}>
+          A separate, informational label a rep can set on any lead — Warm, Cold, Junk, Scheduled, or anything else
+          you add here. Independent of the pipeline status above it: a lead can be "new" and "warm" at the same time.
+        </p>
+        {tags.length === 0 ? (
+          <p className="muted" style={{ margin: '0 0 12px' }}>No tags yet — add the first one below.</p>
+        ) : (
+          <div style={{ marginBottom: 14 }}>
+            {tags.map(t => (
+              <div key={t.id} className="list-row" style={{ justifyContent: 'space-between' }}>
+                <span className={'pill tag-' + t.color}>{t.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <select value={t.color} onChange={e => recolorTag(t, e.target.value)} style={{ fontSize: 12, padding: '4px 6px' }}>
+                    {TAG_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
+                    <input type="checkbox" checked={t.is_active} onChange={() => toggleTag(t)} />
+                    Active
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <form onSubmit={addTag} style={{ display: 'flex', gap: 8 }}>
+          <input value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="Tag name (e.g. VIP)" style={{ flex: 1 }} />
+          <select value={newTagColor} onChange={e => setNewTagColor(e.target.value)}>
+            {TAG_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button className="primary" type="submit" disabled={savingTag || !newTag.trim()}>Add tag</button>
         </form>
       </div>
 

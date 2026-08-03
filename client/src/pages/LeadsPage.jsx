@@ -1,9 +1,22 @@
 import Icon from '../components/Icon.jsx';
-import { fmt } from '../lib/format.js';
+import { fmt, tagColorClass } from '../lib/format.js';
 import { token } from '../lib/api.js';
 import { STATUSES } from '../constants.js';
+import LeadActionsMenu from '../components/LeadActionsMenu.jsx';
 
-export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, open, setShowAdd }) {
+/** Splits "Prestige Group, Sumadhura Group" into separate small tags instead of one long string. */
+function DeveloperPills({ developerName, projectName }) {
+  const names = (developerName || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!names.length) return <>{projectName || '—'}</>;
+  return (
+    <div className="dev-pills">
+      {names.map((n, i) => <span className="dev-pill" key={i}>{n}</span>)}
+      {projectName && <span className="muted" style={{ fontSize: 11, width: '100%' }}>{projectName}</span>}
+    </div>
+  );
+}
+
+export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, open, setShowAdd, onEditLead, onDeleteLead, tags = [] }) {
   const total = leads.length;
   const bySource = (s) => leads.filter(l => l.source === s).length;
   const manual = leads.filter(l => l.entry_method === 'manual').length;
@@ -24,6 +37,10 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
         <select value={filters.status} onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}>
           <option value="">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+        </select>
+        <select value={filters.tag || ''} onChange={e => setFilters(f => ({ ...f, tag: e.target.value }))}>
+          <option value="">All tags</option>
+          {tags.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
         </select>
         <button onClick={load}><Icon name="refresh" size={14} /> Refresh</button>
         <button className="primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={14} /> Add lead</button>
@@ -46,7 +63,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
       <table>
         <thead><tr>
           <th>Received</th><th>Source</th><th>Developer / project</th><th>Name</th>
-          <th>Phone</th><th>Budget</th><th>Status</th><th>Entry</th>
+          <th>Phone</th><th>Budget</th><th>Status</th><th>Tag</th><th>Entry</th><th></th>
         </tr></thead>
         <tbody>
           {leads.map(l => (
@@ -55,18 +72,22 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
               <td><span className={'pill src-' + l.source}>{l.source}</span></td>
               <td className="muted">
                 {l.developer_name || l.project_name
-                  ? <>{l.developer_name || '—'}{l.project_name ? ' · ' + l.project_name : ''}</>
+                  ? <DeveloperPills developerName={l.developer_name} projectName={l.project_name} />
                   : (l.campaign_name || l.utm_campaign || '—')}
               </td>
               <td>{l.full_name || '—'}</td>
               <td>{l.phone_e164}</td>
               <td className="muted">{l.budget_range || '—'}</td>
               <td><span className={'pill st-' + l.status}>{l.status.replace('_', ' ')}</span></td>
+              <td>{l.tag ? <span className={'pill ' + tagColorClass(tags, l.tag)}>{l.tag}</span> : <span className="muted">—</span>}</td>
               <td><span className={'pill em-' + l.entry_method}>{l.entry_method === 'manual' ? 'Manual' : 'Auto'}</span></td>
+              <td>
+                <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} />
+              </td>
             </tr>
           ))}
-          {!leads.length && !loading && <tr><td colSpan={8} className="empty">No leads match these filters.</td></tr>}
-          {loading && <tr><td colSpan={8} className="empty">Loading…</td></tr>}
+          {!leads.length && !loading && <tr><td colSpan={10} className="empty">No leads match these filters.</td></tr>}
+          {loading && <tr><td colSpan={10} className="empty">Loading…</td></tr>}
         </tbody>
       </table>
     </>

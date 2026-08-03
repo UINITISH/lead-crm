@@ -107,6 +107,54 @@ export async function addEvent(leadId, { event_type, from_status = null, to_stat
   );
 }
 
+/**
+ * Fields a rep can edit after a lead already exists. Phone and source are
+ * included deliberately — call-ins get numbers mistyped and a lead's true
+ * channel sometimes only becomes clear after the fact — but campaign-level
+ * attribution (campaign_id, adset, gclid, etc.) stays off this list: that's
+ * what proves ad performance and is only ever set at ingestion time, never
+ * edited after the fact. `tag` (Warm/Cold/Junk/Scheduled/…) is a separate,
+ * informational classification independent of `status` — the pipeline stage
+ * (new/contacted/site_visit/negotiation/closed/dropped) that drives the
+ * dashboard funnel and deal eligibility stays untouched by this list, on
+ * purpose, and is changed only via updateStatus().
+ */
+const EDITABLE_LEAD_FIELDS = [
+  'full_name', 'email', 'phone_raw', 'phone_e164', 'source',
+  'budget_range', 'budget_min', 'budget_max', 'timeline',
+  'developer_name', 'project_name', 'tag',
+];
+
+/**
+ * Partial update. Returns { before, after } so the caller can write a
+ * human-readable "what changed" note into the lead's activity thread —
+ * returns null if the lead doesn't exist.
+ */
+export async function updateLead(leadId, fields = {}) {
+  const current = await one(`SELECT * FROM leads WHERE id = $1`, [leadId]);
+  if (!current) return null;
+
+  const keys = EDITABLE_LEAD_FIELDS.filter((k) => fields[k] !== undefined);
+  if (!keys.length) return { before: current, after: current };
+
+  const sets = keys.map((k, i) => `${k} = $${i + 2}`);
+  const params = [leadId, ...keys.map((k) => fields[k])];
+  const res = await query(
+    `UPDATE leads SET ${sets.join(', ')}, updated_at = now() WHERE id = $1 RETURNING *`,
+    params,
+  );
+  return { before: current, after: res.rows[0] };
+}
+
+/**
+ * Hard delete. lead_events/deals/follow_ups all cascade (ON DELETE CASCADE),
+ * so nothing is left orphaned. Returns false if the lead was already gone.
+ */
+export async function deleteLead(leadId) {
+  const res = await query(`DELETE FROM leads WHERE id = $1 RETURNING id`, [leadId]);
+  return res.rows.length > 0;
+}
+
 export async function updateStatus(leadId, newStatus, { actor = 'user', note = null } = {}) {
   const current = await one(`SELECT status FROM leads WHERE id = $1`, [leadId]);
   if (!current) return null;
@@ -133,6 +181,7 @@ export async function listLeads(filters = {}) {
 
   if (filters.source)        add('source = ?', filters.source);
   if (filters.status)        add('status = ?', filters.status);
+  if (filters.tag)           add('tag = ?', filters.tag);
   if (filters.campaign_id)   add('campaign_id = ?', filters.campaign_id);
   if (filters.entry_method)  add('entry_method = ?', filters.entry_method);
   if (filters.developer_name) add('developer_name = ?', filters.developer_name);

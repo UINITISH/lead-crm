@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import Icon from './components/Icon.jsx';
 import AddLeadModal from './components/AddLeadModal.jsx';
+import EditLeadModal from './components/EditLeadModal.jsx';
+import LeadActionsMenu from './components/LeadActionsMenu.jsx';
 import DealEditModal from './components/DealEditModal.jsx';
 import FollowUpQuickAdd from './components/FollowUpQuickAdd.jsx';
 import CreateDealQuickAdd from './components/CreateDealQuickAdd.jsx';
@@ -11,7 +13,7 @@ import DevelopersPage from './pages/DevelopersPage.jsx';
 import IngestLogPage from './pages/IngestLogPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import { api } from './lib/api.js';
-import { fmt, fmtINR } from './lib/format.js';
+import { fmt, fmtINR, tagColorClass } from './lib/format.js';
 import { STATUSES, NAV, DEAL_STAGE_LABELS, DEAL_ELIGIBLE_STATUSES } from './constants.js';
 
 export default function App() {
@@ -23,12 +25,17 @@ export default function App() {
   const [selectedFollowups, setSelectedFollowups] = useState([]);
   const [selectedDeals, setSelectedDeals] = useState([]);
   const [editingDeal, setEditingDeal] = useState(null);
+  const [editingLead, setEditingLead] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [postingNote, setPostingNote] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [actingAs, setActingAs] = useState(sessionStorage.getItem('crm_actor') || '');
   const [companyName, setCompanyName] = useState('Core Value Realty');
   const [reps, setReps] = useState([]);
+  const [tags, setTags] = useState([]);
 
   useEffect(() => {
     if (actingAs) sessionStorage.setItem('crm_actor', actingAs);
@@ -37,9 +44,10 @@ export default function App() {
   useEffect(() => {
     async function loadMeta() {
       try {
-        const [s, r] = await Promise.all([api('/settings'), api('/reps?active_only=1')]);
+        const [s, r, t] = await Promise.all([api('/settings'), api('/reps?active_only=1'), api('/tags?active_only=1')]);
         setCompanyName(s.settings?.company_name || 'Core Value Realty');
         setReps(r.reps || []);
+        setTags(t.tags || []);
       } catch { /* sidebar falls back to defaults */ }
     }
     loadMeta();
@@ -61,6 +69,19 @@ export default function App() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Slide the drawer in once there's a lead to show it for — two rAFs so the
+  // browser paints the off-screen position first, same trick EditLeadModal uses.
+  useEffect(() => {
+    if (!selected) return;
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setDrawerOpen(true)));
+    return () => cancelAnimationFrame(id);
+  }, [selected]);
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setTimeout(() => setSelected(null), 260);
+  }
+
   async function open(id) {
     const [r, fr, dr] = await Promise.all([
       api('/leads/' + id), api('/leads/' + id + '/followups'), api('/leads/' + id + '/deals'),
@@ -74,6 +95,35 @@ export default function App() {
     await api(`/leads/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, actor: actingAs || 'admin' }) });
     await load();
     if (selected?.id === id) open(id);
+  }
+
+  async function setTag(id, tag) {
+    await api(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify({ tag: tag || null, actor: actingAs || 'admin' }) });
+    await load();
+    if (selected?.id === id) open(id);
+  }
+
+  async function deleteLead(lead) {
+    const ok = window.confirm(`Delete ${lead.full_name || lead.phone_e164}? This removes the lead and its whole history — can't be undone.`);
+    if (!ok) return;
+    await api('/leads/' + lead.id, { method: 'DELETE' });
+    if (selected?.id === lead.id) closeDrawer();
+    await load();
+  }
+
+  async function postNote() {
+    if (!noteDraft.trim() || !selected) return;
+    setPostingNote(true);
+    try {
+      await api(`/leads/${selected.id}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ note: noteDraft.trim(), actor: actingAs || 'admin' }),
+      });
+      setNoteDraft('');
+      await open(selected.id);
+    } finally {
+      setPostingNote(false);
+    }
   }
 
   return (
@@ -113,7 +163,8 @@ export default function App() {
       <main>
         {page === 'leads' && (
           <LeadsPage leads={leads} report={report} filters={filters} setFilters={setFilters}
-                     loading={loading} error={error} load={load} open={open} setShowAdd={setShowAdd} />
+                     loading={loading} error={error} load={load} open={open} setShowAdd={setShowAdd}
+                     onEditLead={setEditingLead} onDeleteLead={deleteLead} tags={tags} />
         )}
         {page === 'dashboard' && <DashboardPage leads={leads} report={report} load={load} actingAs={actingAs} />}
         {page === 'deals' && <DealsPage actingAs={actingAs} />}
@@ -129,6 +180,15 @@ export default function App() {
         />
       )}
 
+      {editingLead && (
+        <EditLeadModal
+          lead={editingLead}
+          actingAs={actingAs}
+          onClose={() => setEditingLead(null)}
+          onSaved={() => { setEditingLead(null); load(); if (selected?.id === editingLead.id) open(editingLead.id); }}
+        />
+      )}
+
       {editingDeal && (
         <DealEditModal
           deal={editingDeal}
@@ -139,11 +199,15 @@ export default function App() {
       )}
 
       {selected && (
-        <div className="drawer" onClick={e => e.stopPropagation()}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className={'drawer' + (drawerOpen ? ' open' : '')} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <h1 style={{ margin: 0 }}>{selected.full_name || 'Unnamed lead'}</h1>
             <div className="grow" />
-            <button onClick={() => setSelected(null)}><Icon name="x" size={14} /></button>
+            <LeadActionsMenu
+              onEdit={() => setEditingLead(selected)}
+              onDelete={() => deleteLead(selected)}
+            />
+            <button onClick={closeDrawer}><Icon name="x" size={14} /></button>
           </div>
 
           <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -156,13 +220,30 @@ export default function App() {
             ))}
           </div>
 
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {selected.tag && <span className={'pill ' + tagColorClass(tags, selected.tag)}>{selected.tag}</span>}
+            <select value={selected.tag || ''} onChange={e => setTag(selected.id, e.target.value)}
+                    style={{ fontSize: 12, padding: '5px 8px' }}>
+              <option value="">No tag (warm / cold / junk / scheduled…)</option>
+              {tags.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </select>
+          </div>
+
           <h2>Contact</h2>
           <dl className="kv">
             <dt>Phone</dt><dd><a href={'tel:' + selected.phone_e164} style={{ color: 'var(--accent)' }}>{selected.phone_e164}</a></dd>
             <dt>Email</dt><dd>{selected.email || '—'}</dd>
             <dt>Budget</dt><dd>{selected.budget_range || '—'}</dd>
             <dt>Timeline</dt><dd>{selected.timeline || '—'}</dd>
-            <dt>Developer</dt><dd>{selected.developer_name || '—'}</dd>
+            <dt>Developer</dt><dd>
+              {selected.developer_name
+                ? <div className="dev-pills">
+                    {selected.developer_name.split(',').map(s => s.trim()).filter(Boolean).map((n, i) => (
+                      <span className="dev-pill" key={i}>{n}</span>
+                    ))}
+                  </div>
+                : '—'}
+            </dd>
             <dt>Project</dt><dd>{selected.project_name || '—'}</dd>
           </dl>
 
@@ -228,14 +309,27 @@ export default function App() {
             <dt>First touch</dt><dd className="muted">{selected.first_touch ? JSON.stringify(selected.first_touch) : '—'}</dd>
           </dl>
 
-          <h2>Lifecycle</h2>
-          {(selected.events || []).map(ev => (
+          <h2>Activity</h2>
+          <p className="muted" style={{ marginTop: -4, marginBottom: 8, fontSize: 11.5 }}>
+            A running thread anyone on the team can add to — "called yesterday", "ready to visit the site", whatever's actually happening with this lead.
+          </p>
+          <div className="activity-add">
+            <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
+                      placeholder="Add an update…"
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postNote(); } }} />
+            <button className="primary" disabled={postingNote || !noteDraft.trim()} onClick={postNote}>
+              {postingNote ? 'Posting…' : 'Post'}
+            </button>
+          </div>
+          {[...(selected.events || [])].reverse().map(ev => (
             <div className="event" key={ev.id}>
-              <span className="muted">{fmt(ev.created_at)}</span> · {ev.event_type}
-              {ev.to_status ? ` → ${ev.to_status}` : ''}
-              {ev.note ? <div className="muted">{ev.note}</div> : null}
+              <span className="muted">{fmt(ev.created_at)}</span>
+              {ev.actor ? <span className="muted"> · {ev.actor}</span> : null}
+              {ev.to_status ? ` → ${ev.to_status.replace('_', ' ')}` : ''}
+              {ev.note ? <div>{ev.note}</div> : null}
             </div>
           ))}
+          {!(selected.events || []).length && <div className="muted" style={{ fontSize: 12 }}>No activity yet.</div>}
         </div>
       )}
     </>

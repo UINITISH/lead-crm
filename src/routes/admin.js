@@ -7,7 +7,7 @@
  */
 import express from 'express';
 import {
-  listLeads, getLead, updateStatus, sourceReport, insertLead, logIngest, addEvent,
+  listLeads, getLead, updateStatus, updateLead, deleteLead, sourceReport, insertLead, logIngest, addEvent,
   listRecentActivity, leaderboard, dashboardStats,
 } from '../leads.js';
 import { query as raw } from '../db.js';
@@ -24,6 +24,7 @@ import {
   listSettings, setSetting, getIntegrationStatus, getDataStats, wipeTestLeads,
 } from '../settings.js';
 import { listReps, createRep, updateRep } from '../reps.js';
+import { listTags, createTag, updateTag } from '../tags.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
 
 const toNum = (v) => {
@@ -76,6 +77,7 @@ adminRouter.get('/leads', async (req, res) => {
   const rows = await listLeads({
     source: req.query.source,
     status: req.query.status,
+    tag: req.query.tag,
     campaign_id: req.query.campaign_id,
     entry_method: req.query.entry_method,
     developer_name: req.query.developer_name,
@@ -116,12 +118,17 @@ adminRouter.post('/leads/manual', async (req, res) => {
 
   // Developer/project: accept an existing id, or a typed name to create on
   // the spot. Neither is required — a lead can be logged before the project
-  // is pinned down and edited later.
+  // is pinned down and edited later. A comma means multiple developers
+  // ("Prestige Group, Sumadhura Group") — that's stored as free text on the
+  // lead only, same convention used everywhere else, and deliberately never
+  // sent to findOrCreateDeveloper: doing so would create a bogus directory
+  // entry literally named after the whole combined string.
   let developer = null;
+  const isMultiDeveloper = cleanText(body.developer_name)?.includes(',');
   if (body.developer_id) {
     developer = await raw(`SELECT * FROM developers WHERE id = $1`, [body.developer_id]).then((r) => r.rows[0]);
     if (!developer) return res.status(400).json({ ok: false, error: 'Unknown developer_id', field: 'developer_id' });
-  } else if (cleanText(body.developer_name)) {
+  } else if (cleanText(body.developer_name) && !isMultiDeveloper) {
     const grade = ['A', 'B'].includes(body.developer_grade) ? body.developer_grade : null;
     developer = await findOrCreateDeveloper(body.developer_name, grade);
   }
@@ -326,6 +333,95 @@ adminRouter.get('/leads/:id', async (req, res) => {
   res.json({ ok: true, lead });
 });
 
+/**
+ * Edit an existing lead's business-facing fields (name/email/phone/source/
+ * budget/timeline/developer/project/tag — see EDITABLE_LEAD_FIELDS in
+ * leads.js). `tag` (Warm/Cold/Junk/Scheduled/…) is separate from `status`
+ * (the pipeline stage) — use PATCH /leads/:id/status for that instead.
+ * Multiple developers are supported as one comma-separated string in
+ * `developer_name` ("Prestige Group, Sumadhura Group") — same free-text
+ * convention already used by manual entry and the spreadsheet imports;
+ * there's no separate join table to keep this simple. Every change lands in
+ * the lead's activity thread as a note, so "who changed what, and to what"
+ * stays answerable without a separate audit table. Campaign-level attribution
+ * (campaign_id, adset, gclid, etc.) is deliberately NOT editable here — that
+ * proves ad performance and is only ever set at ingestion time.
+ */
+adminRouter.patch('/leads/:id', async (req, res) => {
+  const body = req.body || {};
+  const fields = {};
+  if ('full_name' in body)      fields.full_name = cleanText(body.full_name, 200);
+  if ('email' in body)          fields.email = normalizeEmail(body.email);
+  if ('budget_range' in body)   fields.budget_range = cleanText(body.budget_range, 100);
+  if ('budget_min' in body)     fields.budget_min = toNum(body.budget_min);
+  if ('budget_max' in body)     fields.budget_max = toNum(body.budget_max);
+  if ('timeline' in body)       fields.timeline = cleanText(body.timeline, 100);
+  if ('developer_name' in body) fields.developer_name = cleanText(body.developer_name, 300);
+  if ('project_name' in body)   fields.project_name = cleanText(body.project_name, 200);
+  // '' clears the tag — not validated against the managed list on purpose,
+  // same reasoning as developer_name: a tag renamed or removed later in
+  // Settings shouldn't retroactively invalidate what a lead was marked as.
+  if ('tag' in body)            fields.tag = body.tag ? cleanText(body.tag, 100) : null;
+
+  if ('phone' in body) {
+    const phone_e164 = normalizePhone(body.phone);
+    if (!phone_e164) return res.status(400).json({ ok: false, error: 'That doesn’t look like a valid phone number', field: 'phone' });
+    fields.phone_raw = cleanText(body.phone, 50);
+    fields.phone_e164 = phone_e164;
+  }
+  if ('source' in body) {
+    const SOURCES = ['meta', 'google', 'website'];
+    if (!SOURCES.includes(body.source)) {
+      return res.status(400).json({ ok: false, error: `source must be one of ${SOURCES.join(', ')}`, field: 'source' });
+    }
+    fields.source = body.source;
+  }
+
+  if (!Object.keys(fields).length) {
+    return res.status(400).json({ ok: false, error: 'No editable fields in request.' });
+  }
+
+  const result = await updateLead(req.params.id, fields);
+  if (!result) return res.status(404).json({ ok: false, error: 'Not found' });
+  const { before, after } = result;
+  const actor = cleanText(body.actor, 100) || 'admin';
+
+  const changes = Object.keys(fields)
+    .filter((k) => String(before[k] ?? '') !== String(after[k] ?? ''))
+    .map((k) => `${k.replace(/_/g, ' ')}: "${before[k] ?? '—'}" → "${after[k] ?? '—'}"`);
+
+  if (changes.length) {
+    await addEvent(req.params.id, { event_type: 'note', note: `Lead details updated — ${changes.join('; ')}`, actor });
+  }
+
+  res.json({ ok: true, lead: after });
+});
+
+/** Deletes a lead outright. lead_events/deals/follow_ups cascade with it. */
+adminRouter.delete('/leads/:id', async (req, res) => {
+  const deleted = await deleteLead(req.params.id);
+  if (!deleted) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, deleted: true });
+});
+
+/**
+ * Post a freeform update to a lead's activity thread — "called yesterday",
+ * "ready to visit the site", whatever the rep actually needs to log. Not
+ * tied to a status change (updateStatus already covers that path); this is
+ * for the running commentary a sales team keeps on a lead day to day.
+ */
+adminRouter.post('/leads/:id/notes', async (req, res) => {
+  const { note, actor } = req.body || {};
+  const cleaned = cleanText(note, 2000);
+  if (!cleaned) return res.status(400).json({ ok: false, error: 'note is required', field: 'note' });
+
+  const lead = await getLead(req.params.id);
+  if (!lead) return res.status(404).json({ ok: false, error: 'Not found' });
+
+  await addEvent(req.params.id, { event_type: 'note', note: cleaned, actor: cleanText(actor, 100) || 'admin' });
+  res.status(201).json({ ok: true, lead: await getLead(req.params.id) });
+});
+
 adminRouter.patch('/leads/:id/status', async (req, res) => {
   const { status, note, actor } = req.body || {};
   const allowed = ['new', 'contacted', 'site_visit', 'negotiation', 'closed', 'dropped'];
@@ -463,4 +559,31 @@ adminRouter.patch('/reps/:id', async (req, res) => {
   });
   if (!rep) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, rep });
+});
+
+/**
+ * Lead tags — an editable classification list (Warm/Cold/Junk/Scheduled/…),
+ * managed from Settings the same way reps are. Separate from the pipeline
+ * `status`: see the PATCH /leads/:id comment above for why.
+ */
+adminRouter.get('/tags', async (req, res) => {
+  res.json({ ok: true, tags: await listTags({ activeOnly: req.query.active_only === '1' }) });
+});
+
+adminRouter.post('/tags', async (req, res) => {
+  const { name, color } = req.body || {};
+  if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
+  const tag = await createTag(name, color);
+  res.status(201).json({ ok: true, tag });
+});
+
+adminRouter.patch('/tags/:id', async (req, res) => {
+  const { name, color, is_active } = req.body || {};
+  const tag = await updateTag(req.params.id, {
+    name: name !== undefined ? name : undefined,
+    color: color !== undefined ? color : undefined,
+    is_active: is_active !== undefined ? is_active : undefined,
+  });
+  if (!tag) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, tag });
 });

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api.js';
 import { NEW } from '../constants.js';
+import DeveloperMultiSelect from './DeveloperMultiSelect.jsx';
 
 /**
  * Manual lead entry. Covers two real cases: a call-in logged by hand, and a
@@ -9,36 +10,35 @@ import { NEW } from '../constants.js';
  * person fills in themselves rather than something inferred.
  */
 export default function AddLeadModal({ onClose, onSaved }) {
-  const [devs, setDevs] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [devSelection, setDevSelection] = useState({ names: [], ids: [] });
   const [form, setForm] = useState({
     full_name: '', phone: '', email: '', budget_range: '', budget_min: '', budget_max: '', timeline: '',
-    source: 'meta', developer_id: '', developer_new: '', developer_grade: '',
-    project_id: '', project_new: '', notes: '',
+    source: 'meta',
+    project_id: '', project_new: '', project_text: '', notes: '',
     actor: sessionStorage.getItem('crm_actor') || '',
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
-  useEffect(() => { api('/developers').then(r => setDevs(r.developers || [])).catch(() => {}); }, []);
+  // A project dropdown only makes sense when there's exactly one unambiguous,
+  // known developer selected — with multiple developers (or a freeform one),
+  // a single project link doesn't apply, so it falls back to a plain text field.
+  const singleKnownDevId = devSelection.ids.length === 1 && devSelection.names.length === 1
+    ? devSelection.ids[0] : null;
 
   useEffect(() => {
-    if (!form.developer_id || form.developer_id === NEW) { setProjects([]); return; }
-    api('/projects?developer_id=' + form.developer_id).then(r => setProjects(r.projects || [])).catch(() => {});
-  }, [form.developer_id]);
+    if (!singleKnownDevId) { setProjects([]); return; }
+    api('/projects?developer_id=' + singleKnownDevId).then(r => setProjects(r.projects || [])).catch(() => {});
+  }, [singleKnownDevId]);
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
-
-  const gradeA = devs.filter(d => d.grade === 'A');
-  const gradeB = devs.filter(d => d.grade === 'B');
-  const gradeOther = devs.filter(d => !d.grade);
 
   async function submit(e) {
     e.preventDefault();
     setErr(null);
 
     if (!form.phone.trim()) { setErr('Phone number is required.'); return; }
-    if (form.developer_id === NEW && !form.developer_new.trim()) { setErr('Enter the new developer’s name.'); return; }
     if (form.project_id === NEW && !form.project_new.trim()) { setErr('Enter the new project’s name.'); return; }
 
     const payload = {
@@ -53,16 +53,18 @@ export default function AddLeadModal({ onClose, onSaved }) {
       notes: form.notes || null,
       actor: form.actor || 'admin',
     };
-    if (form.developer_id === NEW) {
-      payload.developer_name = form.developer_new;
-      payload.developer_grade = form.developer_grade || null;
-    } else if (form.developer_id) {
-      payload.developer_id = form.developer_id;
+
+    if (singleKnownDevId) {
+      payload.developer_id = singleKnownDevId;
+    } else if (devSelection.names.length > 0) {
+      payload.developer_name = devSelection.names.join(', ');
     }
-    if (form.project_id === NEW) {
-      payload.project_name = form.project_new;
-    } else if (form.project_id) {
-      payload.project_id = form.project_id;
+
+    if (singleKnownDevId) {
+      if (form.project_id === NEW) payload.project_name = form.project_new;
+      else if (form.project_id) payload.project_id = form.project_id;
+    } else if (form.project_text.trim()) {
+      payload.project_name = form.project_text.trim();
     }
 
     setSaving(true);
@@ -139,61 +141,30 @@ export default function AddLeadModal({ onClose, onSaved }) {
             Optional, powers the dashboard's pipeline value. 150 = ₹1.5 Cr.
           </p>
 
-          <div className="row2">
-            <div className="field">
-              <label>Developer</label>
-              <select value={form.developer_id} onChange={set('developer_id')}>
-                <option value="">— Select developer —</option>
-                {gradeA.length > 0 && (
-                  <optgroup label="A-Grade">
-                    {gradeA.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </optgroup>
-                )}
-                {gradeB.length > 0 && (
-                  <optgroup label="B-Grade">
-                    {gradeB.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </optgroup>
-                )}
-                {gradeOther.length > 0 && (
-                  <optgroup label="Other">
-                    {gradeOther.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </optgroup>
-                )}
-                <option value={NEW}>+ Add new developer…</option>
-              </select>
-            </div>
+          <div className="field">
+            <label>Developer(s)</label>
+            <DeveloperMultiSelect initialNames={[]} onChange={setDevSelection} />
+          </div>
+
+          {singleKnownDevId ? (
             <div className="field">
               <label>Project</label>
-              <select value={form.project_id} onChange={set('project_id')}
-                      disabled={!form.developer_id}>
+              <select value={form.project_id} onChange={set('project_id')}>
                 <option value="">— Select project —</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 <option value={NEW}>+ Add new project…</option>
               </select>
+              {form.project_id === NEW && (
+                <input style={{ marginTop: 8 }} value={form.project_new} onChange={set('project_new')} placeholder="e.g. Casagrand Utopia" />
+              )}
             </div>
-          </div>
-
-          {form.developer_id === NEW && (
-            <div className="row2">
-              <div className="field">
-                <label>New developer name *</label>
-                <input value={form.developer_new} onChange={set('developer_new')} placeholder="e.g. Casagrand" />
-              </div>
-              <div className="field">
-                <label>Grade</label>
-                <select value={form.developer_grade} onChange={set('developer_grade')}>
-                  <option value="">Unknown</option>
-                  <option value="A">A-Grade</option>
-                  <option value="B">B-Grade</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {form.project_id === NEW && (
+          ) : (
             <div className="field">
-              <label>New project name *</label>
-              <input value={form.project_new} onChange={set('project_new')} placeholder="e.g. Casagrand Utopia" />
+              <label>Project / location</label>
+              <input value={form.project_text} onChange={set('project_text')} placeholder="e.g. Whitefield, or a specific project name" />
+              <p className="muted" style={{ margin: '5px 0 0', fontSize: 11 }}>
+                Free text — a specific project link only applies when exactly one known developer is selected above.
+              </p>
             </div>
           )}
 

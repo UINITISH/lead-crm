@@ -292,6 +292,31 @@ CREATE INDEX IF NOT EXISTS ingest_log_created_idx ON ingest_log (created_at DESC
 CREATE INDEX IF NOT EXISTS ingest_log_outcome_idx ON ingest_log (outcome);
 
 -- ---------------------------------------------------------------------------
+-- lead_tags — a managed, editable label ("Warm", "Cold", "Junk", "Scheduled",
+-- and whatever else the team wants to add later from Settings) that sits
+-- ALONGSIDE the pipeline `status` column, not instead of it. `status` still
+-- drives the dashboard funnel and deal-creation eligibility; a tag is just an
+-- informational classification a rep can set independently — a lead can be
+-- "new" and "warm" at the same time, or "contacted" and "junk".
+--
+-- Same snapshot convention as developer_name/project_name elsewhere: leads.tag
+-- is plain TEXT, not a live foreign key, so renaming or deactivating a tag in
+-- Settings never silently rewrites what a past lead was actually marked as.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS lead_tags (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT NOT NULL,
+  color       TEXT NOT NULL DEFAULT 'gray',   -- one of the preset keys in styles.css (.tag-*)
+  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order  INT NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS lead_tags_name_uniq ON lead_tags (LOWER(name));
+
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag TEXT;
+CREATE INDEX IF NOT EXISTS leads_tag_idx ON leads (tag);
+
+-- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$

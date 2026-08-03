@@ -30,3 +30,16 @@ export function initials(name) {
   const parts = String(name).trim().split(/\s+/);
   return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
 }
+
+/**
+ * A lead's `tag` is a plain-text snapshot (see db/schema.sql lead_tags
+ * comment) — it doesn't carry its own color, so pill rendering looks it up
+ * by name against the current managed tag list. If the tag was since
+ * renamed or removed in Settings, this just falls back to a neutral gray
+ * pill rather than losing the label entirely.
+ */
+export function tagColorClass(tags, name) {
+  if (!name) return 'tag-gray';
+  const hit = tags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+  return 'tag-' + (hit?.color || 'gray');
+}
