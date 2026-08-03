@@ -8,6 +8,7 @@ import { websiteRouter } from './routes/website.js';
 import { metaRouter } from './routes/meta.js';
 import { googleRouter } from './routes/google.js';
 import { adminRouter } from './routes/admin.js';
+import { publicFormRouter } from './routes/publicForm.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const app = express();
@@ -40,6 +41,7 @@ app.use('/api/leads', websiteRouter);
 app.use('/api/leads', metaRouter);
 app.use('/api/leads', googleRouter);
 app.use('/api/admin', adminRouter);
+app.use('/f', publicFormRouter);
 
 app.use(express.static(path.join(here, '..', 'public')));
 

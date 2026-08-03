@@ -42,6 +42,16 @@ button:hover { background:#f5f6f8; }
 button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:500; }
 button.primary:hover { background:#255fd6; }
 .pill { display:inline-block; padding:3px 10px; border-radius:99px; font-size:11px; font-weight:500; }
+/* Same look as .pill but a real <select> — lets a rep change status/tag right in the
+   table row after a call, no need to open the drawer first. */
+.pill-select { display:inline-block; padding:3px 22px 3px 10px; border-radius:99px; font-size:11px;
+  font-weight:500; border:1px solid transparent; cursor:pointer; font-family:inherit;
+  background-color:#f0f1f3; color:var(--muted);
+  background-image:url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3e%3cpath fill='%23888' d='M3 4.5l3 3 3-3z'/%3e%3c/svg%3e");
+  background-repeat:no-repeat; background-position:right 7px center; background-size:9px;
+  -webkit-appearance:none; appearance:none; }
+.pill-select:hover { border-color:var(--line); }
+.pill-select:focus { outline:2px solid var(--accent); outline-offset:1px; }
 .src-meta   { color:#1a56db; background:#e8f0fe; }
 .src-google { color:var(--warn); background:var(--warn-bg); }
 .src-website{ color:var(--good); background:var(--good-bg); }

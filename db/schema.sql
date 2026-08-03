@@ -317,6 +317,36 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag TEXT;
 CREATE INDEX IF NOT EXISTS leads_tag_idx ON leads (tag);
 
 -- ---------------------------------------------------------------------------
+-- lead_forms — self-service "Contact Form 7"-style lead capture forms. An
+-- admin builds one from Settings, gets back a public_id, and embeds
+-- /f/:public_id in an <iframe> on the WordPress site. Submissions land
+-- directly as `leads` rows (source = 'website') with NO shared secret
+-- involved — the form is served BY this app, so the browser posts back to
+-- the same origin the iframe loaded from, sidestepping the HMAC-signed
+-- /api/leads/website path entirely (that one's for a server-to-server
+-- integration; this one's for a plain embed a non-developer can paste in).
+--
+-- Which form a lead came through is recorded on the existing generic
+-- leads.form_id/form_name columns (already used by Meta/Google for their own
+-- lead-form identifiers) rather than a new column — same meaning, different
+-- channel.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS lead_forms (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  public_id      TEXT NOT NULL,           -- short random token used in the embed URL
+  name           TEXT NOT NULL,           -- internal label, e.g. "Homepage contact form"
+  show_email     BOOLEAN NOT NULL DEFAULT TRUE,
+  show_budget    BOOLEAN NOT NULL DEFAULT TRUE,
+  show_project   BOOLEAN NOT NULL DEFAULT TRUE,
+  show_message   BOOLEAN NOT NULL DEFAULT TRUE,
+  developer_name TEXT,                    -- optional: pin the project dropdown to one developer
+  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by     TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS lead_forms_public_id_uniq ON lead_forms (public_id);
+
+-- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$

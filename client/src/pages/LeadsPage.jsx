@@ -16,7 +16,7 @@ function DeveloperPills({ developerName, projectName }) {
   );
 }
 
-export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, open, setShowAdd, onEditLead, onDeleteLead, tags = [] }) {
+export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, open, setShowAdd, onEditLead, onDeleteLead, tags = [], onSetStatus, onSetTag }) {
   const total = leads.length;
   const bySource = (s) => leads.filter(l => l.source === s).length;
   const manual = leads.filter(l => l.entry_method === 'manual').length;
@@ -78,8 +78,19 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
               <td>{l.full_name || '—'}</td>
               <td>{l.phone_e164}</td>
               <td className="muted">{l.budget_range || '—'}</td>
-              <td><span className={'pill st-' + l.status}>{l.status.replace('_', ' ')}</span></td>
-              <td>{l.tag ? <span className={'pill ' + tagColorClass(tags, l.tag)}>{l.tag}</span> : <span className="muted">—</span>}</td>
+              <td onClick={e => e.stopPropagation()}>
+                <select className={'pill-select st-' + l.status} value={l.status}
+                        onChange={e => onSetStatus(l.id, e.target.value)}>
+                  {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                </select>
+              </td>
+              <td onClick={e => e.stopPropagation()}>
+                <select className={'pill-select ' + tagColorClass(tags, l.tag)} value={l.tag || ''}
+                        onChange={e => onSetTag(l.id, e.target.value)}>
+                  <option value="">No tag</option>
+                  {tags.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                </select>
+              </td>
               <td><span className={'pill em-' + l.entry_method}>{l.entry_method === 'manual' ? 'Manual' : 'Auto'}</span></td>
               <td>
                 <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} />

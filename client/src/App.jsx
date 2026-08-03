@@ -10,6 +10,7 @@ import LeadsPage from './pages/LeadsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import DealsPage from './pages/DealsPage.jsx';
 import DevelopersPage from './pages/DevelopersPage.jsx';
+import FormsPage from './pages/FormsPage.jsx';
 import IngestLogPage from './pages/IngestLogPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import { api } from './lib/api.js';
@@ -164,11 +165,13 @@ export default function App() {
         {page === 'leads' && (
           <LeadsPage leads={leads} report={report} filters={filters} setFilters={setFilters}
                      loading={loading} error={error} load={load} open={open} setShowAdd={setShowAdd}
-                     onEditLead={setEditingLead} onDeleteLead={deleteLead} tags={tags} />
+                     onEditLead={setEditingLead} onDeleteLead={deleteLead} tags={tags}
+                     onSetStatus={setStatus} onSetTag={setTag} />
         )}
         {page === 'dashboard' && <DashboardPage leads={leads} report={report} load={load} actingAs={actingAs} />}
         {page === 'deals' && <DealsPage actingAs={actingAs} />}
         {page === 'developers' && <DevelopersPage />}
+        {page === 'forms' && <FormsPage />}
         {page === 'ingest' && <IngestLogPage />}
         {page === 'settings' && <SettingsPage />}
       </main>

@@ -6,6 +6,7 @@ export const NAV = [
   { key: 'leads',      label: 'Leads',                  icon: 'users' },
   { key: 'deals',      label: 'Deals',                  icon: 'briefcase' },
   { key: 'developers', label: 'Developers & projects',  icon: 'building' },
+  { key: 'forms',      label: 'Lead forms',             icon: 'code' },
   { key: 'ingest',     label: 'Ingest log',             icon: 'inbox' },
   { key: 'settings',   label: 'Settings',               icon: 'settings' },
 ];

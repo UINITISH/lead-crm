@@ -25,6 +25,7 @@ import {
 } from '../settings.js';
 import { listReps, createRep, updateRep } from '../reps.js';
 import { listTags, createTag, updateTag } from '../tags.js';
+import { listForms, createForm, updateForm, deleteForm } from '../forms.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
 
 const toNum = (v) => {
@@ -586,4 +587,44 @@ adminRouter.patch('/tags/:id', async (req, res) => {
   });
   if (!tag) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, tag });
+});
+
+/**
+ * Lead-capture forms — the "Contact Form 7" equivalent. Public rendering/
+ * submission lives in routes/publicForm.js (unauthenticated, mounted at
+ * /f/:public_id); these routes are the token-protected management API behind
+ * the Forms page.
+ */
+adminRouter.get('/forms', async (req, res) => {
+  res.json({ ok: true, forms: await listForms() });
+});
+
+adminRouter.post('/forms', async (req, res) => {
+  const { name, show_email, show_budget, show_project, show_message, developer_name, actor } = req.body || {};
+  if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
+  const form = await createForm({
+    name: cleanText(name, 200),
+    show_email, show_budget, show_project, show_message,
+    developer_name: developer_name ? cleanText(developer_name, 200) : null,
+    created_by: cleanText(actor, 100) || 'admin',
+  });
+  res.status(201).json({ ok: true, form });
+});
+
+adminRouter.patch('/forms/:id', async (req, res) => {
+  const { name, show_email, show_budget, show_project, show_message, developer_name, is_active } = req.body || {};
+  const form = await updateForm(req.params.id, {
+    name: name !== undefined ? cleanText(name, 200) : undefined,
+    show_email, show_budget, show_project, show_message,
+    developer_name: developer_name !== undefined ? (cleanText(developer_name, 200) || null) : undefined,
+    is_active,
+  });
+  if (!form) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, form });
+});
+
+adminRouter.delete('/forms/:id', async (req, res) => {
+  const ok = await deleteForm(req.params.id);
+  if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true });
 });
