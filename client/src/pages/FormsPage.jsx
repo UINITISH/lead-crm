@@ -1,16 +1,60 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Icon from '../components/Icon.jsx';
 import { api } from '../lib/api.js';
 
-const FIELD_OPTIONS = [
-  { key: 'show_email', label: 'Email' },
-  { key: 'show_budget', label: 'Budget range' },
-  { key: 'show_project', label: 'Which project interested in' },
-  { key: 'show_message', label: 'Message / notes' },
-];
+const CLOSE_MS = 260; // matches the .side-panel transition duration in styles.css
+
+const DEFAULT_FIELDS = () => ([
+  { key: 'first_name', label: 'First name', type: 'text', required: true },
+  { key: 'last_name', label: 'Last name', type: 'text', required: false },
+  { key: 'email', label: 'Email', type: 'email', required: false },
+  { key: 'budget', label: 'Budget', type: 'budget', required: false },
+  { key: 'project', label: 'Which project interested in', type: 'project', required: false },
+  { key: 'message', label: 'Message / notes', type: 'textarea', required: false },
+]);
+
+function newCustomField() {
+  return { key: 'custom_' + Date.now().toString(36) + Math.floor(Math.random() * 1000), label: '', type: 'text', required: false };
+}
 
 function embedUrl(publicId) {
   return window.location.origin + '/f/' + publicId;
+}
+
+/** Shared shell for both side panels — slides in from the right, no dark backdrop, click-outside to dismiss. */
+function SidePanel({ title, onClose, children }) {
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  function dismiss() {
+    setOpen(false);
+    setTimeout(onClose, CLOSE_MS);
+  }
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) dismiss();
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className={'side-panel' + (open ? ' open' : '')} ref={panelRef} onClick={(e) => e.stopPropagation()}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <h1 style={{ margin: 0 }}>{title}</h1>
+        <div className="grow" />
+        <button onClick={dismiss}><Icon name="x" size={14} /></button>
+      </div>
+      {children(dismiss)}
+    </div>
+  );
 }
 
 function EmbedPanel({ form, onClose }) {
@@ -27,34 +71,65 @@ function EmbedPanel({ form, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
-        <h1>Embed "{form.name}"</h1>
-        <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
-          Paste this into a WordPress "Custom HTML" block (or any page's HTML) wherever you want the form to appear.
-          Submissions land directly in your Leads list, tagged source: website.
-        </p>
-        <textarea readOnly value={snippet} rows={4}
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 12.5, marginTop: 8 }}
-                  onClick={e => e.target.select()} />
-        <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
-          <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, alignSelf: 'center' }}>Preview form ↗</a>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onClose}>Close</button>
-            <button className="primary" onClick={copy}>{copied ? 'Copied!' : 'Copy code'}</button>
+    <SidePanel title={`Embed "${form.name}"`} onClose={onClose}>
+      {(dismiss) => (
+        <>
+          <p className="muted" style={{ fontSize: 13 }}>
+            Paste this into a WordPress "Custom HTML" block (or any page's HTML) wherever you want the form to appear.
+            Submissions land directly in your Leads list, tagged source: website.
+          </p>
+          <textarea readOnly value={snippet} rows={5}
+                    style={{ width: '100%', fontFamily: 'monospace', fontSize: 12.5 }}
+                    onClick={(e) => e.target.select()} />
+          <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+            <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, alignSelf: 'center' }}>Preview form ↗</a>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={dismiss}>Close</button>
+              <button className="primary" onClick={copy}>{copied ? 'Copied!' : 'Copy code'}</button>
+            </div>
           </div>
-        </div>
+        </>
+      )}
+    </SidePanel>
+  );
+}
+
+function FieldRow({ field, onChange, onRemove }) {
+  return (
+    <div className="list-row" style={{ alignItems: 'flex-start', gap: 10 }}>
+      <div style={{ flex: 1 }}>
+        <input value={field.label} placeholder="Field label"
+               onChange={(e) => onChange({ ...field, label: e.target.value })}
+               style={{ marginBottom: 4 }} />
+        <div className="muted" style={{ fontSize: 11, textTransform: 'capitalize' }}>{field.type.replace('_', ' ')} field</div>
       </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 400, fontSize: 12, marginTop: 8, whiteSpace: 'nowrap' }}>
+        <input type="checkbox" checked={field.required} onChange={(e) => onChange({ ...field, required: e.target.checked })} />
+        Required
+      </label>
+      <button type="button" onClick={onRemove} title="Remove field" style={{ marginTop: 4, color: 'var(--bad)', padding: '6px 8px' }}>
+        <Icon name="trash-2" size={14} />
+      </button>
     </div>
   );
 }
 
 function NewFormPanel({ developers, onClose, onSaved }) {
   const [name, setName] = useState('');
-  const [fields, setFields] = useState({ show_email: true, show_budget: true, show_project: true, show_message: true });
+  const [fields, setFields] = useState(DEFAULT_FIELDS);
   const [developerName, setDeveloperName] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
+
+  function updateField(i, next) {
+    setFields((list) => list.map((f, idx) => (idx === i ? next : f)));
+  }
+  function removeField(i) {
+    setFields((list) => list.filter((_, idx) => idx !== i));
+  }
+  function addField() {
+    setFields((list) => [...list, newCustomField()]);
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -62,9 +137,10 @@ function NewFormPanel({ developers, onClose, onSaved }) {
     setSaving(true);
     setErr(null);
     try {
+      const cleanFields = fields.map((f) => ({ ...f, label: f.label.trim() })).filter((f) => f.label);
       await api('/forms', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim(), ...fields, developer_name: developerName || null }),
+        body: JSON.stringify({ name: name.trim(), fields: cleanFields, developer_name: developerName || null }),
       });
       onSaved();
     } catch (e2) {
@@ -74,41 +150,50 @@ function NewFormPanel({ developers, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <h1>New lead form</h1>
+    <SidePanel title="New lead form" onClose={onClose}>
+      {(dismiss) => (
         <form onSubmit={submit}>
-          {err && <div className="err" style={{ color: 'var(--bad)', fontSize: 12.5, marginBottom: 10 }}>{err}</div>}
+          {err && <div className="form-error" style={{ marginTop: 16 }}>{err}</div>}
+
+          <h2>Basics</h2>
           <div className="field">
             <label>Form name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Homepage contact form" required />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Homepage contact form" required />
           </div>
-          <div className="field">
-            <label>Fields to collect (name &amp; phone are always included)</label>
-            {FIELD_OPTIONS.map(f => (
-              <label key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, fontSize: 13, margin: '6px 0' }}>
-                <input type="checkbox" checked={fields[f.key]}
-                       onChange={e => setFields(s => ({ ...s, [f.key]: e.target.checked }))} />
-                {f.label}
-              </label>
-            ))}
-          </div>
-          {fields.show_project && (
-            <div className="field">
-              <label>Pin the project dropdown to one developer (optional)</label>
-              <select value={developerName} onChange={e => setDeveloperName(e.target.value)}>
-                <option value="">All developers</option>
-                {developers.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </select>
-            </div>
+
+          <h2>Fields</h2>
+          <p className="muted" style={{ marginTop: -8, marginBottom: 10, fontSize: 12 }}>
+            Phone number is always collected — it's how leads get matched and de-duplicated. Everything else below is
+            yours to edit: rename, mark required, delete, or add your own.
+          </p>
+          {fields.map((f, i) => (
+            <FieldRow key={f.key} field={f} onChange={(next) => updateField(i, next)} onRemove={() => removeField(i)} />
+          ))}
+          {!fields.length && <div className="muted" style={{ fontSize: 12, padding: '8px 0' }}>No extra fields — just phone number.</div>}
+          <button type="button" onClick={addField} style={{ marginTop: 8 }}>
+            <Icon name="plus" size={13} /> Add field
+          </button>
+
+          {fields.some((f) => f.key === 'project') && (
+            <>
+              <h2>Project dropdown</h2>
+              <div className="field">
+                <label>Pin it to one developer (optional)</label>
+                <select value={developerName} onChange={(e) => setDeveloperName(e.target.value)}>
+                  <option value="">All developers</option>
+                  {developers.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </select>
+              </div>
+            </>
           )}
+
           <div className="modal-actions">
-            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="button" onClick={dismiss}>Cancel</button>
             <button type="submit" className="primary" disabled={saving || !name.trim()}>{saving ? 'Saving…' : 'Create form'}</button>
           </div>
         </form>
-      </div>
-    </div>
+      )}
+    </SidePanel>
   );
 }
 
@@ -166,7 +251,7 @@ export default function FormsPage() {
         <div className="card">No forms yet — click "New form" to create your first one.</div>
       )}
 
-      {!loading && forms.map(f => (
+      {!loading && forms.map((f) => (
         <div className="card" key={f.id} style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontWeight: 600, flex: 1 }}>{f.name}</span>
@@ -180,6 +265,9 @@ export default function FormsPage() {
           {f.developer_name && (
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Pinned to: {f.developer_name}</div>
           )}
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Fields: Phone{(f.fields || []).length ? ', ' + f.fields.map((x) => x.label).join(', ') : ''}
+          </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button className="primary" onClick={() => setEmbedFor(f)}>Get embed code</button>
             <button onClick={() => toggleActive(f)}>{f.is_active ? 'Turn off' : 'Turn on'}</button>

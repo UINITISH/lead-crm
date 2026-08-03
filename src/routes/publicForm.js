@@ -9,9 +9,16 @@
  * this app, so the browser's POST is same-origin from the iframe's point of
  * view. Protection is a honeypot field + a per-IP rate limit, same posture
  * as any public "contact us" form.
+ *
+ * Fields (other than phone) are fully admin-editable — see forms.js. This
+ * file just renders whatever `form.fields` says, in order, and maps the
+ * handful of known keys (first_name/last_name/email/budget/project/message)
+ * onto real lead columns; anything else (a custom field the admin added) is
+ * captured into raw_payload.custom_fields AND written onto the new lead's
+ * activity thread as a note, so a rep sees it without opening raw JSON.
  */
 import express from 'express';
-import { insertLead, logIngest } from '../leads.js';
+import { insertLead, logIngest, addEvent } from '../leads.js';
 import { normalizePhone, normalizeEmail, cleanText, extractAttribution } from '../normalize.js';
 import { getFormByPublicId } from '../forms.js';
 import { listDevelopers, listProjects } from '../developers.js';
@@ -100,40 +107,47 @@ ${body}
 </html>`;
 }
 
+/** One field's HTML, given its type/key/label and the value to re-populate on a validation error. */
+async function fieldHtml(form, field, values) {
+  const val = values[field.key];
+  const reqMark = field.required ? ' <span class="req">*</span>' : '';
+  const reqAttr = field.required ? ' required' : '';
+  switch (field.type) {
+    case 'email':
+      return `<label>${esc(field.label)}${reqMark}</label><input type="email" name="${esc(field.key)}"${reqAttr} value="${esc(val)}" />`;
+    case 'textarea':
+      return `<label>${esc(field.label)}${reqMark}</label><textarea name="${esc(field.key)}"${reqAttr}>${esc(val)}</textarea>`;
+    case 'budget':
+      return `<label>${esc(field.label)}${reqMark}</label><select name="${esc(field.key)}"${reqAttr}>
+        <option value="">Select…</option>
+        ${BUDGET_BANDS.map((b) => `<option value="${esc(b)}"${val === b ? ' selected' : ''}>${esc(b)}</option>`).join('')}
+      </select>`;
+    case 'project':
+      return `<label>${esc(field.label)}${reqMark}</label><select name="${esc(field.key)}"${reqAttr}>
+        <option value="">Select…</option>
+        ${await projectOptions(form, val)}
+      </select>`;
+    case 'text':
+    default:
+      return `<label>${esc(field.label)}${reqMark}</label><input type="text" name="${esc(field.key)}"${reqAttr} value="${esc(val)}" />`;
+  }
+}
+
 async function formBody(form, { error = null, values = {} } = {}) {
+  const fields = Array.isArray(form.fields) ? form.fields : [];
+  const rendered = [];
+  for (const f of fields) rendered.push(await fieldHtml(form, f, values));
+
   return `
 ${error ? `<div class="err">${esc(error)}</div>` : ''}
 <h1>${esc(form.name)}</h1>
 <form method="POST" action="/f/${esc(form.public_id)}/submit">
   <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" />
 
-  <label>Full name <span class="req">*</span></label>
-  <input type="text" name="full_name" required value="${esc(values.full_name)}" />
+  ${rendered.join('\n')}
 
   <label>Phone <span class="req">*</span></label>
   <input type="tel" name="phone" required value="${esc(values.phone)}" />
-
-  ${form.show_email ? `
-  <label>Email</label>
-  <input type="email" name="email" value="${esc(values.email)}" />` : ''}
-
-  ${form.show_budget ? `
-  <label>Budget</label>
-  <select name="budget_range">
-    <option value="">Select…</option>
-    ${BUDGET_BANDS.map((b) => `<option value="${esc(b)}"${values.budget_range === b ? ' selected' : ''}>${esc(b)}</option>`).join('')}
-  </select>` : ''}
-
-  ${form.show_project ? `
-  <label>Interested in</label>
-  <select name="project_choice">
-    <option value="">Select a project (optional)…</option>
-    ${await projectOptions(form, values.project_choice)}
-  </select>` : ''}
-
-  ${form.show_message ? `
-  <label>Message</label>
-  <textarea name="message">${esc(values.message)}</textarea>` : ''}
 
   <button type="submit">Submit</button>
 </form>`;
@@ -163,6 +177,8 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
     }));
   }
 
+  const fields = Array.isArray(form.fields) ? form.fields : [];
+
   const reRender = async (error) => {
     const body_ = await formBody(form, { error, values: body });
     return res.status(400).send(page({ title: form.name, body: body_ }));
@@ -182,19 +198,37 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
     })); // lie to the bot, same as the website webhook does
   }
 
-  const full_name = cleanText(body.full_name, 200);
-  if (!full_name) return reRender('Please enter your name.');
+  // Any field marked required must actually have a value.
+  for (const f of fields) {
+    if (f.required && !cleanText(body[f.key])) return reRender(`Please fill in "${f.label}".`);
+  }
 
   const phone_e164 = normalizePhone(body.phone);
   if (!phone_e164) return reRender('Please enter a valid phone number.');
 
+  const hasField = (key) => fields.some((f) => f.key === key);
+
+  // The generic "required" loop above already rejected a missing required
+  // first_name/last_name — this just assembles what's present into one name.
+  const firstName = hasField('first_name') ? cleanText(body.first_name, 100) : null;
+  const lastName = hasField('last_name') ? cleanText(body.last_name, 100) : null;
+  const full_name = [firstName, lastName].filter(Boolean).join(' ') || null;
+
   let developer_name = form.developer_name || null;
   let project_name = null;
-  if (body.project_choice) {
-    const [devPart, projPart] = String(body.project_choice).split('|||');
+  if (hasField('project') && body.project) {
+    const [devPart, projPart] = String(body.project).split('|||');
     developer_name = cleanText(devPart) || developer_name;
     project_name = cleanText(projPart);
   }
+
+  // Anything on the form that isn't one of the known core keys is a custom
+  // field the admin added — capture it verbatim so nothing typed gets lost.
+  const CORE_KEYS = new Set(['first_name', 'last_name', 'email', 'budget', 'project', 'message']);
+  const customAnswers = fields
+    .filter((f) => !CORE_KEYS.has(f.key))
+    .map((f) => ({ label: f.label, value: cleanText(body[f.key], 500) }))
+    .filter((a) => a.value);
 
   const attr = extractAttribution(req.query || {});
 
@@ -203,8 +237,8 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
       full_name,
       phone_raw: cleanText(body.phone, 50),
       phone_e164,
-      email: normalizeEmail(body.email),
-      budget_range: cleanText(body.budget_range, 100),
+      email: hasField('email') ? normalizeEmail(body.email) : null,
+      budget_range: hasField('budget') ? cleanText(body.budget, 100) : null,
       developer_name,
       project_name,
       source: 'website',
@@ -212,15 +246,23 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
       form_name: form.name,
       ...attr,
       landing_page: cleanText(req.get('Referer'), 1000),
-      raw_payload: { ...body, message: cleanText(body.message, 2000) },
+      raw_payload: { ...body, custom_fields: customAnswers },
       submitted_at: new Date().toISOString(),
     });
+
+    if (hasField('message') && cleanText(body.message)) {
+      await addEvent(lead.id, { event_type: 'note', note: `Message from form: ${cleanText(body.message, 2000)}`, actor: 'system' });
+    }
+    if (customAnswers.length) {
+      const note = customAnswers.map((a) => `${a.label}: ${a.value}`).join(' · ');
+      await addEvent(lead.id, { event_type: 'note', note: `Form answers — ${note}`, actor: 'system' });
+    }
 
     await logIngest({ source: 'website', outcome, lead_id: lead.id, http_status: 201, payload: body });
 
     return res.send(page({
       title: form.name,
-      body: `<div class="thanks"><h1>Thanks, ${esc(full_name.split(' ')[0])}!</h1><p>We've received your details and will be in touch shortly.</p></div>`,
+      body: `<div class="thanks"><h1>Thanks${firstName ? ', ' + esc(firstName) : ''}!</h1><p>We've received your details and will be in touch shortly.</p></div>`,
     }));
   } catch (err) {
     console.error('[public-form] insert failed:', err);

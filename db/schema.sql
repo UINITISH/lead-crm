@@ -335,7 +335,7 @@ CREATE TABLE IF NOT EXISTS lead_forms (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   public_id      TEXT NOT NULL,           -- short random token used in the embed URL
   name           TEXT NOT NULL,           -- internal label, e.g. "Homepage contact form"
-  show_email     BOOLEAN NOT NULL DEFAULT TRUE,
+  show_email     BOOLEAN NOT NULL DEFAULT TRUE,   -- superseded by `fields` below, kept for old rows
   show_budget    BOOLEAN NOT NULL DEFAULT TRUE,
   show_project   BOOLEAN NOT NULL DEFAULT TRUE,
   show_message   BOOLEAN NOT NULL DEFAULT TRUE,
@@ -345,6 +345,15 @@ CREATE TABLE IF NOT EXISTS lead_forms (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS lead_forms_public_id_uniq ON lead_forms (public_id);
+
+-- Freeform, admin-editable field list — first name / last name / email /
+-- budget / which-project / message by default, but any of them can be
+-- deleted and arbitrary custom text fields added, straight from the Forms
+-- page's field builder. Ordered array of {key, label, type, required}.
+-- Phone number is NOT in here — it's always collected, hardcoded in the
+-- public form template, because leads.phone_e164 is NOT NULL and every
+-- dedupe/report query in this app keys off it.
+ALTER TABLE lead_forms ADD COLUMN IF NOT EXISTS fields JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- ---------------------------------------------------------------------------
 -- updated_at trigger

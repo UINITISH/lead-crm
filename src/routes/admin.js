@@ -600,11 +600,11 @@ adminRouter.get('/forms', async (req, res) => {
 });
 
 adminRouter.post('/forms', async (req, res) => {
-  const { name, show_email, show_budget, show_project, show_message, developer_name, actor } = req.body || {};
+  const { name, fields, developer_name, actor } = req.body || {};
   if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
   const form = await createForm({
     name: cleanText(name, 200),
-    show_email, show_budget, show_project, show_message,
+    fields,
     developer_name: developer_name ? cleanText(developer_name, 200) : null,
     created_by: cleanText(actor, 100) || 'admin',
   });
@@ -612,10 +612,10 @@ adminRouter.post('/forms', async (req, res) => {
 });
 
 adminRouter.patch('/forms/:id', async (req, res) => {
-  const { name, show_email, show_budget, show_project, show_message, developer_name, is_active } = req.body || {};
+  const { name, fields, developer_name, is_active } = req.body || {};
   const form = await updateForm(req.params.id, {
     name: name !== undefined ? cleanText(name, 200) : undefined,
-    show_email, show_budget, show_project, show_message,
+    fields,
     developer_name: developer_name !== undefined ? (cleanText(developer_name, 200) || null) : undefined,
     is_active,
   });
