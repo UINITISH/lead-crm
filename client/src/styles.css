@@ -88,6 +88,14 @@ button.primary:hover { background:#255fd6; }
 .kv dd { margin:0; word-break:break-word; }
 h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);
      margin:24px 0 8px; font-weight:600; }
+.help-topic h3 { font-size:12.5px; font-weight:700; margin:14px 0 4px; color:var(--text); }
+.help-topic h3:first-child { margin-top:0; }
+.help-topic p { margin:0 0 10px; font-size:13.5px; line-height:1.6; color:var(--text); }
+.help-topic p:last-child { margin-bottom:0; }
+.help-topic code { background:#f0f1f3; padding:1px 5px; border-radius:4px; font-size:12px; font-family:monospace; }
+.help-card { cursor:pointer; }
+.help-card-head { display:flex; align-items:center; gap:10px; }
+.help-card-head .name { font-weight:600; font-size:14px; flex:1; }
 .event { border-left:2px solid var(--line); padding:6px 0 6px 12px; margin-bottom:2px; font-size:12px; }
 .empty { padding:48px; text-align:center; color:var(--muted); }
 .em-manual { color:#6b3fa0; border-color:#4a2d63; }

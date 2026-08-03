@@ -13,6 +13,7 @@ import DevelopersPage from './pages/DevelopersPage.jsx';
 import FormsPage from './pages/FormsPage.jsx';
 import IngestLogPage from './pages/IngestLogPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import HelpPage from './pages/HelpPage.jsx';
 import { api } from './lib/api.js';
 import { fmt, fmtINR, tagColorClass } from './lib/format.js';
 import { STATUSES, NAV, DEAL_STAGE_LABELS, DEAL_ELIGIBLE_STATUSES } from './constants.js';
@@ -174,6 +175,7 @@ export default function App() {
         {page === 'forms' && <FormsPage />}
         {page === 'ingest' && <IngestLogPage />}
         {page === 'settings' && <SettingsPage />}
+        {page === 'help' && <HelpPage />}
       </main>
 
       {showAdd && (

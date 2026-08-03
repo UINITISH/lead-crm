@@ -1,0 +1,51 @@
+# Render "Blueprint" — lets you deploy this whole app (web service + database)
+# in one go instead of configuring each piece by hand.
+#
+# How to use: on render.com, click "New +" -> "Blueprint", connect this repo,
+# and Render reads this file automatically. It will ask you to fill in the
+# secret values marked `sync: false` below — see README/chat notes for where
+# each one comes from (Meta App dashboard, or values you choose yourself).
+#
+# Everything else (build, start, restart-on-push, the database connection)
+# is wired up automatically.
+
+databases:
+  - name: core-value-realty-db
+    plan: free
+    databaseName: core_realty_crm
+    user: core_realty_crm
+
+services:
+  - type: web
+    name: core-value-realty-crm
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: core-value-realty-db
+          property: connectionString
+      # --- Website form ingestion ---------------------------------------
+      - key: WEBSITE_INGEST_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # --- Meta (Facebook/Instagram) Lead Ads ---------------------------
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_VERIFY_TOKEN
+        sync: false
+      - key: META_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: META_GRAPH_VERSION
+        value: v21.0
+      # --- Google Ads Lead Form ------------------------------------------
+      - key: GOOGLE_WEBHOOK_KEY
+        sync: false
+      # --- Admin UI --------------------------------------------------------
+      - key: ADMIN_TOKEN
+        sync: false

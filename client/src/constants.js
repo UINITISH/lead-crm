@@ -9,6 +9,7 @@ export const NAV = [
   { key: 'forms',      label: 'Lead forms',             icon: 'code' },
   { key: 'ingest',     label: 'Ingest log',             icon: 'inbox' },
   { key: 'settings',   label: 'Settings',               icon: 'settings' },
+  { key: 'help',       label: 'Help Center',            icon: 'help-circle' },
 ];
 
 export const DEAL_STAGES = ['negotiation', 'booked', 'closed_won', 'closed_lost'];
