@@ -5,9 +5,12 @@
  * why this needs no shared secret the way /api/leads/website does.
  *
  * `fields` is a freeform, ordered, admin-editable list of {key, label, type,
- * required} — not a fixed checklist. Phone number is deliberately NOT part
- * of it: it's always collected (see routes/publicForm.js) because
- * leads.phone_e164 is NOT NULL and dedupe depends on it.
+ * required} — including a 'phone' entry, so an admin can drag it to wherever
+ * they want it to appear. It's still special: sanitizeFields() always forces
+ * it to be present, type 'tel', and required — because leads.phone_e164 is
+ * NOT NULL and dedupe depends on it — an admin can move it but not remove it
+ * or make it optional. Older forms saved before this existed get 'phone'
+ * backfilled into their stored fields once, by backfillPhoneField() below.
  */
 import crypto from 'node:crypto';
 import { query, one } from './db.js';
@@ -17,14 +20,15 @@ function genPublicId() {
   return crypto.randomBytes(6).toString('base64url'); // 8 URL-safe chars
 }
 
-const FIELD_TYPES = new Set(['text', 'email', 'textarea', 'budget', 'project', 'select', 'checkboxes']);
+const FIELD_TYPES = new Set(['text', 'email', 'tel', 'textarea', 'budget', 'project', 'select', 'checkboxes']);
 const OPTION_TYPES = new Set(['select', 'checkboxes']);
-const CORE_KEYS = new Set(['first_name', 'last_name', 'email', 'budget', 'project', 'message']);
+const CORE_KEYS = new Set(['first_name', 'last_name', 'email', 'phone', 'budget', 'project', 'message']);
 
 export function defaultFields() {
   return [
     { key: 'first_name', label: 'First name', type: 'text', required: true },
     { key: 'last_name', label: 'Last name', type: 'text', required: false },
+    { key: 'phone', label: 'Phone', type: 'tel', required: true },
     { key: 'email', label: 'Email', type: 'email', required: false },
     { key: 'budget', label: 'Budget', type: 'budget', required: false },
     { key: 'project', label: 'Which project interested in', type: 'project', required: false },
@@ -34,22 +38,34 @@ export function defaultFields() {
 
 let customFieldSeq = 0;
 
-/** Sanitizes an admin-submitted field list — bad/unknown types are dropped, not stored. */
+/**
+ * Sanitizes an admin-submitted field list — bad/unknown types are dropped,
+ * not stored — and guarantees exactly one 'phone' field, always type 'tel'
+ * and always required, regardless of what the admin sent (they can drag it
+ * anywhere in the list, or omit it entirely and it comes back at the end).
+ */
 export function sanitizeFields(input) {
-  if (!Array.isArray(input)) return [];
+  if (!Array.isArray(input)) input = [];
   const seenKeys = new Set();
   const out = [];
   for (const raw of input) {
     if (!raw || typeof raw !== 'object') continue;
-    const label = cleanText(raw.label, 100);
-    if (!label) continue;
-    const type = FIELD_TYPES.has(raw.type) ? raw.type : 'text';
     let key = cleanText(raw.key, 60);
     if (!key || !/^[a-z0-9_]+$/.test(key)) {
       key = CORE_KEYS.has(raw.key) ? raw.key : `custom_${Date.now().toString(36)}_${customFieldSeq++}`;
     }
     if (seenKeys.has(key)) continue;
+
+    if (key === 'phone') {
+      seenKeys.add(key);
+      out.push({ key: 'phone', label: cleanText(raw.label, 100) || 'Phone', type: 'tel', required: true });
+      continue;
+    }
+
+    const label = cleanText(raw.label, 100);
+    if (!label) continue;
     seenKeys.add(key);
+    const type = FIELD_TYPES.has(raw.type) ? raw.type : 'text';
 
     const field = { key, label, type, required: Boolean(raw.required) };
     if (OPTION_TYPES.has(type)) {
@@ -60,7 +76,28 @@ export function sanitizeFields(input) {
     }
     out.push(field);
   }
+  if (!seenKeys.has('phone')) out.push({ key: 'phone', label: 'Phone', type: 'tel', required: true });
   return out;
+}
+
+/**
+ * One-time backfill for forms saved before 'phone' was a real field in the
+ * list — injects it right after Last name (or First name, or at the start)
+ * so its rendered position doesn't change for anyone. Safe to re-run: a form
+ * that already has a 'phone' entry is left untouched.
+ */
+export async function backfillPhoneField() {
+  const { rows } = await query(`SELECT id, fields FROM lead_forms`);
+  for (const row of rows) {
+    const fields = Array.isArray(row.fields) ? row.fields : [];
+    if (fields.some((f) => f && f.key === 'phone')) continue;
+    const lastNameIdx = fields.findIndex((f) => f.key === 'last_name');
+    const firstNameIdx = fields.findIndex((f) => f.key === 'first_name');
+    const insertAt = lastNameIdx !== -1 ? lastNameIdx + 1 : firstNameIdx !== -1 ? firstNameIdx + 1 : 0;
+    const next = [...fields];
+    next.splice(insertAt, 0, { key: 'phone', label: 'Phone', type: 'tel', required: true });
+    await query(`UPDATE lead_forms SET fields = $1 WHERE id = $2`, [JSON.stringify(next), row.id]);
+  }
 }
 
 /** All forms, each annotated with how many real (non-duplicate) leads it has produced. */

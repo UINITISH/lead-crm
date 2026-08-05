@@ -120,6 +120,12 @@ async function fieldHtml(form, field, values) {
   switch (field.type) {
     case 'email':
       return `<label>${esc(field.label)}${reqMark}</label><input type="email" name="${esc(field.key)}"${reqAttr} value="${esc(val)}" />`;
+    case 'tel':
+      // Always required in practice (forms.js's sanitizeFields() forces
+      // this), but preview drafts skip the `required` attribute like every
+      // other field so the disabled preview submit button doesn't confuse
+      // native browser validation.
+      return `<label>${esc(field.label)}${reqMark}</label><input type="tel" name="${esc(field.key)}"${reqAttr} value="${esc(val)}" />`;
     case 'textarea':
       return `<label>${esc(field.label)}${reqMark}</label><textarea name="${esc(field.key)}"${reqAttr}>${esc(val)}</textarea>`;
     case 'budget':
@@ -149,31 +155,18 @@ async function fieldHtml(form, field, values) {
   }
 }
 
-function phoneFieldHtml(values, preview) {
-  return `<label>Phone <span class="req">*</span></label>
-  <input type="tel" name="phone"${preview ? '' : ' required'} value="${esc(values.phone)}" />`;
-}
-
 async function formBody(form, { error = null, values = {}, preview = false } = {}) {
   const fields = Array.isArray(form.fields) ? form.fields : [];
   const rendered = [];
   for (const f of fields) rendered.push(await fieldHtml(form, f, values));
 
-  // Phone isn't a field an admin can add/remove/reorder — it's always
-  // required and its own column — but it should still visually sit right
-  // after the person's name rather than always trailing at the very bottom.
-  // Insert it right after Last name (or First name, if a form has no Last
-  // name field), so a name → phone → everything-else reading order holds for
-  // every form without needing each one re-edited. Forms with neither name
-  // field keep the old placement (right before Submit).
-  const lastNameIdx = fields.findIndex((f) => f.key === 'last_name');
-  const firstNameIdx = fields.findIndex((f) => f.key === 'first_name');
-  const insertAfter = lastNameIdx !== -1 ? lastNameIdx : firstNameIdx;
-  const phoneHtml = phoneFieldHtml(values, preview);
-  if (insertAfter === -1) {
-    rendered.push(phoneHtml);
-  } else {
-    rendered.splice(insertAfter + 1, 0, phoneHtml);
+  // forms.js's sanitizeFields() guarantees every saved form has a 'phone'
+  // field, wherever the admin dragged it — this is only a safety net for a
+  // form saved before that guarantee existed and hasn't been re-saved since
+  // (backfillPhoneField() in migrate.js should have already caught those).
+  if (!fields.some((f) => f.key === 'phone')) {
+    rendered.push(`<label>Phone <span class="req">*</span></label>
+  <input type="tel" name="phone"${preview ? '' : ' required'} value="${esc(values.phone)}" />`);
   }
 
   return `
@@ -274,7 +267,7 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
   // field the admin added — capture it verbatim so nothing typed gets lost.
   // A checked group of same-named checkboxes arrives as an array (or a bare
   // string if only one box was ticked) — flatten either into one readable line.
-  const CORE_KEYS = new Set(['first_name', 'last_name', 'email', 'budget', 'project', 'message']);
+  const CORE_KEYS = new Set(['first_name', 'last_name', 'email', 'phone', 'budget', 'project', 'message']);
   const customAnswers = fields
     .filter((f) => !CORE_KEYS.has(f.key))
     .map((f) => {

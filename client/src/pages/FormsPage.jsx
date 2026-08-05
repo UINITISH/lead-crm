@@ -5,18 +5,21 @@ import { api, token } from '../lib/api.js';
 const CLOSE_MS = 260; // matches the .side-panel transition duration in styles.css
 
 const FIELD_TYPE_LABELS = {
-  text: 'Text', email: 'Email', textarea: 'Paragraph',
+  text: 'Text', email: 'Email', tel: 'Phone number', textarea: 'Paragraph',
   select: 'Dropdown', checkboxes: 'Checkboxes',
   budget: 'Budget (preset ranges)', project: 'Project (from your directory)',
 };
 // Types an admin can freely switch a CUSTOM field between. Core fields (first
-// name, email, budget, project, message) keep their fixed type — it's what
-// makes their answers map onto the right lead column.
-const CUSTOM_FIELD_TYPES = ['text', 'email', 'textarea', 'select', 'checkboxes'];
+// name, email, phone, budget, project, message) keep their fixed type — it's
+// what makes their answers map onto the right lead column. 'tel' is included
+// here too, separately from the core phone field, so an admin can add a
+// second phone-style field (e.g. "Alternate number", "WhatsApp") if they want.
+const CUSTOM_FIELD_TYPES = ['text', 'email', 'tel', 'textarea', 'select', 'checkboxes'];
 
 const DEFAULT_FIELDS = () => ([
   { key: 'first_name', label: 'First name', type: 'text', required: true },
   { key: 'last_name', label: 'Last name', type: 'text', required: false },
+  { key: 'phone', label: 'Phone', type: 'tel', required: true },
   { key: 'email', label: 'Email', type: 'email', required: false },
   { key: 'budget', label: 'Budget', type: 'budget', required: false },
   { key: 'project', label: 'Which project interested in', type: 'project', required: false },
@@ -141,12 +144,44 @@ function OptionsEditor({ options, onChange }) {
   );
 }
 
-function FieldRow({ field, onChange, onRemove }) {
+/**
+ * The one field an admin can drag anywhere but can't delete or make
+ * optional — leads.phone_e164 is NOT NULL and dedupe depends on it, so the
+ * backend (forms.js's sanitizeFields()) re-adds it if it's ever missing.
+ * Rather than let that happen silently on save, just don't offer the
+ * controls that would trigger it.
+ */
+function FieldRow({ field, index, onChange, onRemove, onDragStart, onDragOver, onDrop }) {
   const isCustom = field.key.startsWith('custom_');
+  const isPhone = field.key === 'phone';
   const hasOptions = field.type === 'select' || field.type === 'checkboxes';
+  // The whole row is the drag source/drop target (needed for onDragOver to
+  // fire while another row passes over it), but only a press starting on the
+  // grip handle actually initiates the drag — clicking into the label input
+  // or a select shouldn't fight the browser's normal text-selection/drag.
+  const dragAllowed = useRef(false);
 
   return (
-    <div className="list-row" style={{ alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+    <div
+      className="list-row"
+      draggable
+      onDragStart={(e) => {
+        if (!dragAllowed.current) { e.preventDefault(); return; }
+        onDragStart(index);
+      }}
+      onDragOver={(e) => { e.preventDefault(); onDragOver(index); }}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      onDragEnd={() => { dragAllowed.current = false; }}
+      style={{ alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}
+    >
+      <span
+        onMouseDown={() => { dragAllowed.current = true; }}
+        onMouseUp={() => { dragAllowed.current = false; }}
+        title="Drag to reorder"
+        style={{ cursor: 'grab', color: 'var(--muted)', padding: '8px 2px 0 0', touchAction: 'none' }}
+      >
+        <Icon name="grip-vertical" size={15} />
+      </span>
       <div style={{ flex: 1, minWidth: 180 }}>
         <input value={field.label} placeholder="Field label"
                onChange={(e) => onChange({ ...field, label: e.target.value })}
@@ -167,13 +202,19 @@ function FieldRow({ field, onChange, onRemove }) {
           <OptionsEditor options={field.options || []} onChange={(options) => onChange({ ...field, options })} />
         )}
       </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 400, fontSize: 12, marginTop: 8, whiteSpace: 'nowrap' }}>
-        <input type="checkbox" checked={field.required} onChange={(e) => onChange({ ...field, required: e.target.checked })} />
-        Required
-      </label>
-      <button type="button" onClick={onRemove} title="Remove field" style={{ marginTop: 4, color: 'var(--bad)', padding: '6px 8px' }}>
-        <Icon name="trash-2" size={14} />
-      </button>
+      {isPhone ? (
+        <span className="muted" style={{ fontSize: 12, marginTop: 8, whiteSpace: 'nowrap' }}>Always required</span>
+      ) : (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 400, fontSize: 12, marginTop: 8, whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={field.required} onChange={(e) => onChange({ ...field, required: e.target.checked })} />
+          Required
+        </label>
+      )}
+      {!isPhone && (
+        <button type="button" onClick={onRemove} title="Remove field" style={{ marginTop: 4, color: 'var(--bad)', padding: '6px 8px' }}>
+          <Icon name="trash-2" size={14} />
+        </button>
+      )}
     </div>
   );
 }
@@ -186,6 +227,7 @@ function FormBuilderPanel({ form, developers, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [err, setErr] = useState(null);
+  const dragFromRef = useRef(null);
 
   function updateField(i, next) {
     setFields((list) => list.map((f, idx) => (idx === i ? next : f)));
@@ -195,6 +237,15 @@ function FormBuilderPanel({ form, developers, onClose, onSaved }) {
   }
   function addField() {
     setFields((list) => [...list, newCustomField()]);
+  }
+  function moveField(from, to) {
+    if (from === to) return;
+    setFields((list) => {
+      const next = [...list];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   }
 
   function cleanedFields() {
@@ -250,13 +301,27 @@ function FormBuilderPanel({ form, developers, onClose, onSaved }) {
 
           <h2>Fields</h2>
           <p className="muted" style={{ marginTop: -8, marginBottom: 10, fontSize: 12 }}>
-            Phone number is always collected — it's how leads get matched and de-duplicated. Everything else below is
-            yours to edit: rename, mark required, delete, or add your own (including dropdowns and checkboxes with your own options).
+            Drag the <Icon name="grip-vertical" size={11} /> handle to reorder fields. Phone number is always collected —
+            it's how leads get matched and de-duplicated — so you can move it but not delete it or make it optional.
+            Everything else is yours to edit: rename, mark required, delete, or add your own (including dropdowns and
+            checkboxes with your own options).
           </p>
           {fields.map((f, i) => (
-            <FieldRow key={f.key} field={f} onChange={(next) => updateField(i, next)} onRemove={() => removeField(i)} />
+            <FieldRow
+              key={f.key}
+              field={f}
+              index={i}
+              onChange={(next) => updateField(i, next)}
+              onRemove={() => removeField(i)}
+              onDragStart={(idx) => { dragFromRef.current = idx; }}
+              onDragOver={(idx) => {
+                if (dragFromRef.current === null || dragFromRef.current === idx) return;
+                moveField(dragFromRef.current, idx);
+                dragFromRef.current = idx;
+              }}
+              onDrop={() => { dragFromRef.current = null; }}
+            />
           ))}
-          {!fields.length && <div className="muted" style={{ fontSize: 12, padding: '8px 0' }}>No extra fields — just phone number.</div>}
           <button type="button" onClick={addField} style={{ marginTop: 8 }}>
             <Icon name="plus" size={13} /> Add field
           </button>
@@ -370,7 +435,7 @@ export default function FormsPage() {
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Pinned to: {f.developer_name}</div>
           )}
           <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Fields: Phone{(f.fields || []).length ? ', ' + f.fields.map((x) => x.label).join(', ') : ''}
+            Fields: {(f.fields || []).map((x) => x.label).join(', ') || 'Phone'}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <button onClick={() => previewSaved(f)}>Preview</button>
