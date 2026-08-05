@@ -1,0 +1,762 @@
+[
+  {
+    "added_date": "2026-03-18T00:00:00",
+    "name": "Raghav Bhagat",
+    "phone": "9986468035",
+    "status_or_note": null,
+    "builder_name": "tru, mana, other",
+    "booked_by": null
+  },
+  {
+    "added_date": "2026-04-16T00:00:00",
+    "name": "Rohit Raj",
+    "phone": "9900001071",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-04-17T00:00:00",
+    "name": "anchal",
+    "phone": "7847935728",
+    "status_or_note": "Booked",
+    "builder_name": "tru",
+    "booked_by": "Tru"
+  },
+  {
+    "added_date": null,
+    "name": "Gayatri",
+    "phone": "7975844145",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-04-29T00:00:00",
+    "name": "Nikhil Reddy",
+    "phone": "9632054450",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-04-29T00:00:00",
+    "name": "Himanshu",
+    "phone": "8553959101",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-04-29T00:00:00",
+    "name": "Dilip",
+    "phone": "99721 96468",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2016-04-29T00:00:00",
+    "name": "Revathi",
+    "phone": "7829952771",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2020-04-29T00:00:00",
+    "name": "Shreyas Shenoi",
+    "phone": "8296480246",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2021-04-29T00:00:00",
+    "name": "A ronak",
+    "phone": "97409 31372",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2024-04-27T00:00:00",
+    "name": "Sangeeth Sharma",
+    "phone": "9769161772",
+    "status_or_note": "Booked",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2026-04-29T00:00:00",
+    "name": "Rohit pandey",
+    "phone": "9738357327",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2027-04-29T00:00:00",
+    "name": "Rishab Gupta",
+    "phone": "8806667319",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-05-30T00:00:00",
+    "name": "Sandhya Reddy",
+    "phone": "9699806365",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-05-30T00:00:00",
+    "name": "Ashwin",
+    "phone": "8105952205",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-05-30T00:00:00",
+    "name": "Pratham",
+    "phone": "9538430659",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-05-30T00:00:00",
+    "name": "Piyush ger",
+    "phone": "7276616725",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-05-30T00:00:00",
+    "name": "Kanika saxena",
+    "phone": "7217573403",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-05-30T00:00:00",
+    "name": "Kavita saigal",
+    "phone": "9611162233",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-05-30T00:00:00",
+    "name": "Abhishek gosh",
+    "phone": "8902021833",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-05-30T00:00:00",
+    "name": "Virendra Singh bhadouriya",
+    "phone": "9379065614",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-05-30T00:00:00",
+    "name": "Nisha",
+    "phone": "7838486838",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2026-01-03T00:00:00",
+    "name": "Nandin rao",
+    "phone": "9999696426",
+    "status_or_note": "Booking",
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2025-12-09T00:00:00",
+    "name": "SATTI BABU ",
+    "phone": "9490678077",
+    "status_or_note": "Booking",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2026-06-10T00:00:00",
+    "name": "bipul",
+    "phone": "9900676440",
+    "status_or_note": "booking ",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2006-05-30T00:00:00",
+    "name": "Himanshu",
+    "phone": "9038749068",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2006-05-30T00:00:00",
+    "name": "Omkar",
+    "phone": "9960865358",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2008-05-30T00:00:00",
+    "name": "Krishnakant ",
+    "phone": "9036640764",
+    "status_or_note": "BCD developer",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2008-05-30T00:00:00",
+    "name": "Henry sailash simon ",
+    "phone": "8971747667",
+    "status_or_note": "BCD developer",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2010-05-30T00:00:00",
+    "name": "mallidi prasad babu",
+    "phone": "9945454477",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2010-05-30T00:00:00",
+    "name": "Keerthi ",
+    "phone": "9094451599",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2010-05-30T00:00:00",
+    "name": "V.S Kishore ",
+    "phone": "9490132362",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2010-05-30T00:00:00",
+    "name": "siddhant",
+    "phone": "7710881668",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-05-30T00:00:00",
+    "name": "Priyatam Pritu",
+    "phone": "6284079765",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-05-30T00:00:00",
+    "name": "Bipul kumar sinha",
+    "phone": "9900676440",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-05-30T00:00:00",
+    "name": "Anil R",
+    "phone": "9449809879",
+    "status_or_note": "BCD developer",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-05-30T00:00:00",
+    "name": "Rishabh ",
+    "phone": "8369447062",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2014-05-30T00:00:00",
+    "name": "ss",
+    "phone": "9980469893",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2014-05-30T00:00:00",
+    "name": "Harshita",
+    "phone": "7661997235",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2017-05-30T00:00:00",
+    "name": "Rajesh",
+    "phone": "9515131596",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2019-05-30T00:00:00",
+    "name": "kalai",
+    "phone": "9886059327",
+    "status_or_note": "BCD developer",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2025-05-30T00:00:00",
+    "name": "Mansoor",
+    "phone": "7204915929",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2027-05-30T00:00:00",
+    "name": "Ankita sinha ",
+    "phone": "7797293401",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2027-05-30T00:00:00",
+    "name": "Nadeem",
+    "phone": "9900321486",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2027-05-30T00:00:00",
+    "name": "Harika burle",
+    "phone": "9704004093",
+    "status_or_note": "sumadhura sarang",
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-05-30T00:00:00",
+    "name": "chiranjeevi ",
+    "phone": "9206677883",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-05-30T00:00:00",
+    "name": "Amit",
+    "phone": "9681247206",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-05-30T00:00:00",
+    "name": "Brahma ALG ",
+    "phone": "7799269680",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2029-05-30T00:00:00",
+    "name": "Atul Mishra",
+    "phone": "8147109638",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2030-05-30T00:00:00",
+    "name": "Sarang",
+    "phone": "9007106959",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2003-06-29T00:00:00",
+    "name": "Vachan",
+    "phone": "9663444043",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2012-06-29T00:00:00",
+    "name": "Ramji",
+    "phone": "+1 317 3603816",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2014-06-29T00:00:00",
+    "name": "Varsha",
+    "phone": "7022470326",
+    "status_or_note": null,
+    "builder_name": "tru",
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-11-29T00:00:00",
+    "name": "Prateek gupta ",
+    "phone": "9933997829",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-11-29T00:00:00",
+    "name": "Ashwini mishra ",
+    "phone": "9555744087",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-11-29T00:00:00",
+    "name": "zakir hussain ",
+    "phone": "6363543501",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-11-29T00:00:00",
+    "name": "sarath krishnan",
+    "phone": "9965988502",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-11-29T00:00:00",
+    "name": "prajwal ",
+    "phone": "8152090904",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-11-29T00:00:00",
+    "name": "Manikyam",
+    "phone": "7799778363",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-12-30T00:00:00",
+    "name": "Nitheesh",
+    "phone": "8050039991",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-12-30T00:00:00",
+    "name": "Raj kamal",
+    "phone": "8510058257",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2001-12-30T00:00:00",
+    "name": "samir kumar",
+    "phone": "9986894584",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-12-30T00:00:00",
+    "name": "Amit tiwari",
+    "phone": "9823584868",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-12-30T00:00:00",
+    "name": "lipika mohapatra",
+    "phone": "8984584469",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2002-12-30T00:00:00",
+    "name": "uttam barik",
+    "phone": "7202415623",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2004-12-30T00:00:00",
+    "name": "vivek",
+    "phone": "9742806587",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2016-12-30T00:00:00",
+    "name": "Sai",
+    "phone": "7896889251",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2014-12-30T00:00:00",
+    "name": "vivek",
+    "phone": "9742806587",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2024-12-30T00:00:00",
+    "name": "jeevan",
+    "phone": "8792575034",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2024-12-30T00:00:00",
+    "name": "Prasad",
+    "phone": "9986212319",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2026-01-29T00:00:00",
+    "name": "Anupam",
+    "phone": "9900284138",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2008-01-30T00:00:00",
+    "name": "Amit agarwal",
+    "phone": "7349529599",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2009-01-30T00:00:00",
+    "name": "Sai krishna",
+    "phone": "9573723156",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2009-01-30T00:00:00",
+    "name": "Lakshman",
+    "phone": "9030466206",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2009-01-30T00:00:00",
+    "name": "Subramanyam",
+    "phone": "9632917456",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-01-30T00:00:00",
+    "name": "Suraj",
+    "phone": "9007012871",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-01-30T00:00:00",
+    "name": "CKR",
+    "phone": "7892158820",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-01-30T00:00:00",
+    "name": "srinivas",
+    "phone": "9480341519",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-01-30T00:00:00",
+    "name": "malik arjun ",
+    "phone": "9900209667",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-01-30T00:00:00",
+    "name": "Pandey kumar",
+    "phone": "9590956620",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2013-01-30T00:00:00",
+    "name": "sudarshana",
+    "phone": "8142476281",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2018-01-30T00:00:00",
+    "name": "Raghav",
+    "phone": "9986468035",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2022-01-30T00:00:00",
+    "name": "Heera",
+    "phone": "8880613818",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2022-01-30T00:00:00",
+    "name": "vivek  ",
+    "phone": "9945919207",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-01-30T00:00:00",
+    "name": "santhosh raghavan",
+    "phone": "9483609679",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2008-02-28T00:00:00",
+    "name": "Anjali",
+    "phone": "9986069987",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2008-02-28T00:00:00",
+    "name": "Naidu",
+    "phone": "9535606256",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2008-02-28T00:00:00",
+    "name": "Mani Prakash",
+    "phone": "9811971874",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2008-02-28T00:00:00",
+    "name": "Ravi Narhari",
+    "phone": "9518771358",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-02-28T00:00:00",
+    "name": "UDAY",
+    "phone": "7799504050",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2028-02-28T00:00:00",
+    "name": "MADHAVI",
+    "phone": "9676461984",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2018-03-30T00:00:00",
+    "name": "biprajit",
+    "phone": "9755261527",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2026-03-30T00:00:00",
+    "name": "RAGHAV",
+    "phone": "9986468035",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2027-03-30T00:00:00",
+    "name": "gayatri ",
+    "phone": "9497317313",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  },
+  {
+    "added_date": "2010-05-30T00:00:00",
+    "name": "Rajesh sreekantan",
+    "phone": "9632725232",
+    "status_or_note": null,
+    "builder_name": null,
+    "booked_by": null
+  }
+]
