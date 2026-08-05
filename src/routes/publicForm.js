@@ -149,10 +149,32 @@ async function fieldHtml(form, field, values) {
   }
 }
 
+function phoneFieldHtml(values, preview) {
+  return `<label>Phone <span class="req">*</span></label>
+  <input type="tel" name="phone"${preview ? '' : ' required'} value="${esc(values.phone)}" />`;
+}
+
 async function formBody(form, { error = null, values = {}, preview = false } = {}) {
   const fields = Array.isArray(form.fields) ? form.fields : [];
   const rendered = [];
   for (const f of fields) rendered.push(await fieldHtml(form, f, values));
+
+  // Phone isn't a field an admin can add/remove/reorder — it's always
+  // required and its own column — but it should still visually sit right
+  // after the person's name rather than always trailing at the very bottom.
+  // Insert it right after Last name (or First name, if a form has no Last
+  // name field), so a name → phone → everything-else reading order holds for
+  // every form without needing each one re-edited. Forms with neither name
+  // field keep the old placement (right before Submit).
+  const lastNameIdx = fields.findIndex((f) => f.key === 'last_name');
+  const firstNameIdx = fields.findIndex((f) => f.key === 'first_name');
+  const insertAfter = lastNameIdx !== -1 ? lastNameIdx : firstNameIdx;
+  const phoneHtml = phoneFieldHtml(values, preview);
+  if (insertAfter === -1) {
+    rendered.push(phoneHtml);
+  } else {
+    rendered.splice(insertAfter + 1, 0, phoneHtml);
+  }
 
   return `
 ${preview ? `<div class="preview-banner">Preview — this is what visitors will see. Nothing submitted here is saved.</div>` : ''}
@@ -162,9 +184,6 @@ ${error ? `<div class="err">${esc(error)}</div>` : ''}
   <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" />
 
   ${rendered.join('\n')}
-
-  <label>Phone <span class="req">*</span></label>
-  <input type="tel" name="phone"${preview ? '' : ' required'} value="${esc(values.phone)}" />
 
   <button type="submit">${preview ? 'Submit (disabled in preview)' : 'Submit'}</button>
 </form>`;
