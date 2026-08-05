@@ -104,7 +104,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
         <table>
           <thead><tr>
             <th>Received</th><th>Source</th><th>Developer / project</th><th>Name</th>
-            <th>Phone</th><th>Budget</th><th>Status</th><th>Tag</th><th>Occ.</th><th>Entry</th><th></th>
+            <th>Phone</th><th>Budget</th><th>Status</th><th>Tag</th><th>Occ.</th><th></th>
           </tr></thead>
           <tbody>
             {leads.map(l => (
@@ -133,14 +133,13 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
                   </select>
                 </td>
                 <td><OccurrenceBadge n={l.occurrence_count} /></td>
-                <td><span className={'pill em-' + l.entry_method}>{l.entry_method === 'manual' ? 'Manual' : 'Auto'}</span></td>
                 <td>
                   <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} />
                 </td>
               </tr>
             ))}
-            {!leads.length && !loading && <tr><td colSpan={11} className="empty">No leads match these filters.</td></tr>}
-            {loading && <tr><td colSpan={11} className="empty">Loading…</td></tr>}
+            {!leads.length && !loading && <tr><td colSpan={10} className="empty">No leads match these filters.</td></tr>}
+            {loading && <tr><td colSpan={10} className="empty">Loading…</td></tr>}
           </tbody>
         </table>
       ) : (
