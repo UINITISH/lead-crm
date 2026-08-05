@@ -16,8 +16,15 @@ export async function initDb() {
 
   const url = process.env.DATABASE_URL;
   if (url && url.trim()) {
+    // Managed Postgres (Render, Neon, Supabase, RDS, etc.) requires SSL on
+    // external connections but signs with a cert `pg` won't validate against
+    // a public CA bundle by default — without this the pool throws instantly
+    // and every cold start crashes. A bare `localhost`/`127.0.0.1` URL (e.g.
+    // a local Docker Postgres) is the only case that should skip it.
+    const isLocal = /localhost|127\.0\.0\.1/.test(url);
     const pool = new pg.Pool({
       connectionString: url,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30_000,
     });
