@@ -44,6 +44,8 @@ export default function DealsPage({ actingAs }) {
             <div className="card"><div className="l">Open value</div><div className="n">{fmtINR(stats.open_value)}</div></div>
             <div className="card"><div className="l">Closing this month</div><div className="n">{stats.closing_this_month}</div></div>
             <div className="card"><div className="l">Win rate</div><div className="n">{stats.win_rate}%</div></div>
+            <div className="card"><div className="l">Collected</div><div className="n" style={{ color: 'var(--good)' }}>{fmtINR(stats.total_collected)}</div></div>
+            <div className="card"><div className="l">Due</div><div className="n" style={{ color: 'var(--bad)' }}>{fmtINR(stats.total_due)}</div></div>
           </div>
 
           {DEAL_STAGES.map(stage => {

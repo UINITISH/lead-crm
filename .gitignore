@@ -8,5 +8,6 @@ public_build_check/
 .pgdata/
 .pgdata.broken-*/
 .pgdata-test/
+.pgdata.sandbox-fresh-discard/
 *.log
 .DS_Store

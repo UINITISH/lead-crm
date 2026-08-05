@@ -146,6 +146,16 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--
 .dropdown-menu button.danger { color:var(--bad); }
 .dropdown-menu button.danger:hover { background:var(--bad-bg); }
 
+/* Support tickets — status + priority pills. */
+.tkt-open        { color:var(--accent); background:var(--accent-bg); }
+.tkt-in_progress { color:var(--warn); background:var(--warn-bg); }
+.tkt-resolved    { color:var(--good); background:var(--good-bg); }
+.tkt-closed      { color:var(--muted); background:#f0f1f3; }
+.pri-low     { color:var(--muted); background:#f0f1f3; }
+.pri-medium  { color:#1a56db; background:#e8f0fe; }
+.pri-high    { color:var(--warn); background:var(--warn-bg); }
+.pri-urgent  { color:var(--bad); background:var(--bad-bg); }
+
 /* Activity / notes thread. */
 .activity-add { display:flex; gap:8px; margin:10px 0 14px; }
 .activity-add textarea { flex:1; min-height:0; height:38px; resize:vertical; font-family:inherit; }

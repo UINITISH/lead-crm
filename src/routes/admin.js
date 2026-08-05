@@ -19,6 +19,11 @@ import {
 } from '../followups.js';
 import {
   createDeal, listDeals, listForLead as listDealsForLead, getDeal, updateDeal, dealStats,
+  getBooking,
+  addApplicant, updateApplicant, deleteApplicant,
+  addCostItem, updateCostItem, deleteCostItem,
+  addMilestone, updateMilestone, deleteMilestone,
+  addDocument, updateDocument, deleteDocument,
 } from '../deals.js';
 import {
   listSettings, setSetting, getIntegrationStatus, getDataStats, wipeTestLeads,
@@ -27,6 +32,9 @@ import { listReps, createRep, updateRep } from '../reps.js';
 import { listTags, createTag, updateTag } from '../tags.js';
 import { listForms, createForm, updateForm, deleteForm, sanitizeFields } from '../forms.js';
 import { renderFormPreview } from './publicForm.js';
+import {
+  createTicket, listTickets, getTicket, updateTicket, deleteTicket, ticketStats,
+} from '../tickets.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
 
 const toNum = (v) => {
@@ -327,6 +335,139 @@ adminRouter.patch('/deals/:id', async (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
+});
+
+/**
+ * Bookings & payment tracking — sub-resources of a deal (applicants, cost
+ * sheet, payment milestones, document checklist). GET /deals/:id/booking
+ * returns all four plus rollup totals in one call for the booking panel;
+ * each sub-resource also has its own add/update/delete routes.
+ */
+adminRouter.get('/deals/:id/booking', async (req, res) => {
+  const deal = await getDeal(req.params.id);
+  if (!deal) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, ...(await getBooking(req.params.id)) });
+});
+
+adminRouter.post('/deals/:id/applicants', async (req, res) => {
+  const { full_name, relation, phone, email, pan, aadhaar, address, notes } = req.body || {};
+  try {
+    const applicant = await addApplicant(req.params.id, {
+      full_name: cleanText(full_name, 200), relation,
+      phone: cleanText(phone, 50), email: normalizeEmail(email),
+      pan: cleanText(pan, 20), aadhaar: cleanText(aadhaar, 20),
+      address: cleanText(address, 500), notes: cleanText(notes, 1000),
+    });
+    res.status(201).json({ ok: true, applicant });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+adminRouter.patch('/deal-applicants/:id', async (req, res) => {
+  const { full_name, relation, phone, email, pan, aadhaar, address, notes } = req.body || {};
+  try {
+    const applicant = await updateApplicant(req.params.id, {
+      full_name: full_name !== undefined ? cleanText(full_name, 200) : undefined,
+      relation,
+      phone: phone !== undefined ? cleanText(phone, 50) : undefined,
+      email: email !== undefined ? normalizeEmail(email) : undefined,
+      pan: pan !== undefined ? cleanText(pan, 20) : undefined,
+      aadhaar: aadhaar !== undefined ? cleanText(aadhaar, 20) : undefined,
+      address: address !== undefined ? cleanText(address, 500) : undefined,
+      notes: notes !== undefined ? cleanText(notes, 1000) : undefined,
+    });
+    if (!applicant) return res.status(404).json({ ok: false, error: 'Not found' });
+    res.json({ ok: true, applicant });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+adminRouter.delete('/deal-applicants/:id', async (req, res) => {
+  const ok = await deleteApplicant(req.params.id);
+  if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true });
+});
+
+adminRouter.post('/deals/:id/cost-items', async (req, res) => {
+  const { label, amount } = req.body || {};
+  try {
+    const item = await addCostItem(req.params.id, { label: cleanText(label, 200), amount: toNum(amount) });
+    res.status(201).json({ ok: true, item });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+adminRouter.patch('/deal-cost-items/:id', async (req, res) => {
+  const { label, amount } = req.body || {};
+  const item = await updateCostItem(req.params.id, {
+    label: label !== undefined ? cleanText(label, 200) : undefined,
+    amount: amount !== undefined ? toNum(amount) : undefined,
+  });
+  if (!item) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, item });
+});
+
+adminRouter.delete('/deal-cost-items/:id', async (req, res) => {
+  const ok = await deleteCostItem(req.params.id);
+  if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true });
+});
+
+adminRouter.post('/deals/:id/milestones', async (req, res) => {
+  const { label, due_date, amount, notes } = req.body || {};
+  try {
+    const milestone = await addMilestone(req.params.id, {
+      label: cleanText(label, 200), due_date: due_date || null, amount: toNum(amount), notes: cleanText(notes, 500),
+    });
+    res.status(201).json({ ok: true, milestone });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+adminRouter.patch('/deal-milestones/:id', async (req, res) => {
+  const { label, due_date, amount, paid_amount, paid_date, status, notes, actor } = req.body || {};
+  try {
+    const milestone = await updateMilestone(req.params.id, {
+      label: label !== undefined ? cleanText(label, 200) : undefined,
+      due_date: due_date !== undefined ? (due_date || null) : undefined,
+      amount: amount !== undefined ? toNum(amount) : undefined,
+      paid_amount: paid_amount !== undefined ? toNum(paid_amount) : undefined,
+      paid_date: paid_date !== undefined ? (paid_date || null) : undefined,
+      status,
+      notes: notes !== undefined ? cleanText(notes, 500) : undefined,
+    }, { actor: cleanText(actor, 100) || 'admin' });
+    if (!milestone) return res.status(404).json({ ok: false, error: 'Not found' });
+    res.json({ ok: true, milestone });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+adminRouter.delete('/deal-milestones/:id', async (req, res) => {
+  const ok = await deleteMilestone(req.params.id);
+  if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true });
+});
+
+adminRouter.post('/deals/:id/documents', async (req, res) => {
+  const { name, status, reference } = req.body || {};
+  try {
+    const document = await addDocument(req.params.id, { name: cleanText(name, 200), status, reference: cleanText(reference, 500) });
+    res.status(201).json({ ok: true, document });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+adminRouter.patch('/deal-documents/:id', async (req, res) => {
+  const { name, status, reference } = req.body || {};
+  try {
+    const document = await updateDocument(req.params.id, {
+      name: name !== undefined ? cleanText(name, 200) : undefined,
+      status,
+      reference: reference !== undefined ? cleanText(reference, 500) : undefined,
+    });
+    if (!document) return res.status(404).json({ ok: false, error: 'Not found' });
+    res.json({ ok: true, document });
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+});
+
+adminRouter.delete('/deal-documents/:id', async (req, res) => {
+  const ok = await deleteDocument(req.params.id);
+  if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true });
 });
 
 adminRouter.get('/leads/:id', async (req, res) => {
@@ -642,6 +783,73 @@ adminRouter.post('/forms/preview', async (req, res) => {
 
 adminRouter.delete('/forms/:id', async (req, res) => {
   const ok = await deleteForm(req.params.id);
+  if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true });
+});
+
+/**
+ * Support tickets — a discrete, assignable, closeable unit of work, distinct
+ * from a lead's follow-ups or activity thread. Optionally linked to a lead
+ * (lead_id) so a ticket raised about a specific enquiry can be traced back.
+ */
+adminRouter.get('/tickets', async (req, res) => {
+  const { status, priority, department, assignee, lead_id, q, limit } = req.query;
+  res.json({ ok: true, tickets: await listTickets({ status, priority, department, assignee, lead_id, q, limit }) });
+});
+
+adminRouter.get('/ticket-stats', async (_req, res) => {
+  res.json({ ok: true, stats: await ticketStats() });
+});
+
+adminRouter.get('/tickets/:id', async (req, res) => {
+  const ticket = await getTicket(req.params.id);
+  if (!ticket) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, ticket });
+});
+
+adminRouter.post('/tickets', async (req, res) => {
+  const { subject, description, department, priority, lead_id, requester, assignee, actor } = req.body || {};
+  if (!cleanText(subject)) return res.status(400).json({ ok: false, error: 'subject is required', field: 'subject' });
+  try {
+    const ticket = await createTicket({
+      subject: cleanText(subject, 300),
+      description: cleanText(description, 4000),
+      department,
+      priority,
+      lead_id: lead_id || null,
+      requester: cleanText(requester, 200),
+      assignee: cleanText(assignee, 100),
+      created_by: cleanText(actor, 100) || 'admin',
+    });
+    res.status(201).json({ ok: true, ticket });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+adminRouter.patch('/tickets/:id', async (req, res) => {
+  const { subject, description, department, priority, status, assignee, requester, note, actor } = req.body || {};
+  try {
+    const ticket = await updateTicket(req.params.id, {
+      subject: subject !== undefined ? cleanText(subject, 300) : undefined,
+      description: description !== undefined ? cleanText(description, 4000) : undefined,
+      department,
+      priority,
+      status,
+      assignee: assignee !== undefined ? (cleanText(assignee, 100) || null) : undefined,
+      requester: requester !== undefined ? (cleanText(requester, 200) || null) : undefined,
+      note: cleanText(note, 2000),
+      actor: cleanText(actor, 100) || 'admin',
+    });
+    if (!ticket) return res.status(404).json({ ok: false, error: 'Not found' });
+    res.json({ ok: true, ticket });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+adminRouter.delete('/tickets/:id', async (req, res) => {
+  const ok = await deleteTicket(req.params.id);
   if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true });
 });

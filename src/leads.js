@@ -195,7 +195,9 @@ export async function listLeads(filters = {}) {
   if (!filters.include_duplicates) where.push('is_duplicate = FALSE');
   if (!filters.include_test)       where.push('is_test = FALSE');
 
-  const sql = `SELECT * FROM leads
+  const sql = `SELECT l.*,
+      (1 + (SELECT COUNT(*) FROM leads d WHERE d.duplicate_of = l.id))::int AS occurrence_count
+    FROM leads l
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY created_at DESC
     LIMIT ${Math.min(Number(filters.limit) || 200, 1000)}
@@ -211,7 +213,23 @@ export async function getLead(id) {
   const events = await query(
     `SELECT * FROM lead_events WHERE lead_id = $1 ORDER BY created_at ASC`, [id],
   );
-  return { ...lead, events: events.rows };
+  const duplicates = await listDuplicatesOf(id);
+  return { ...lead, events: events.rows, duplicates, occurrence_count: 1 + duplicates.length };
+}
+
+/**
+ * Every repeat submission from the same person, folded into this lead at
+ * intake time (see insertLead's phone-number dedupe). Surfaced in the lead
+ * drawer so a rep can see someone enquired more than once without that
+ * inflating the headline lead count.
+ */
+export async function listDuplicatesOf(leadId) {
+  const res = await query(
+    `SELECT id, full_name, phone_raw, phone_e164, source, form_name, campaign_name, created_at
+       FROM leads WHERE duplicate_of = $1 ORDER BY created_at ASC`,
+    [leadId],
+  );
+  return res.rows;
 }
 
 /**

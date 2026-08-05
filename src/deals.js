@@ -87,6 +87,241 @@ export async function updateDeal(id, { stage, unit_number, agreed_price, expecte
   return res.rows[0];
 }
 
+// ---------------------------------------------------------------------------
+// Bookings & payment tracking — the paperwork a real booking generates once a
+// deal is underway: who's on the application, what the total cost breaks
+// down to, the payment schedule against it, and a document checklist. Each
+// sub-resource is its own small table (deal_applicants/deal_cost_items/
+// deal_payment_milestones/deal_documents), all scoped to one deal_id.
+// ---------------------------------------------------------------------------
+
+export async function listApplicants(dealId) {
+  const res = await query(
+    `SELECT * FROM deal_applicants WHERE deal_id = $1 ORDER BY sort_order, created_at`, [dealId],
+  );
+  return res.rows;
+}
+
+export async function addApplicant(dealId, { full_name, relation = 'primary', phone = null, email = null,
+  pan = null, aadhaar = null, address = null, notes = null, sort_order = 0 }) {
+  if (!full_name || !full_name.trim()) throw new Error('full_name is required');
+  if (!['primary', 'co_applicant'].includes(relation)) throw new Error('relation must be primary or co_applicant');
+  const res = await query(
+    `INSERT INTO deal_applicants (deal_id, full_name, relation, phone, email, pan, aadhaar, address, notes, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [dealId, full_name.trim(), relation, phone, email, pan, aadhaar, address, notes, sort_order],
+  );
+  return res.rows[0];
+}
+
+export async function updateApplicant(id, fields = {}) {
+  const current = await one(`SELECT * FROM deal_applicants WHERE id = $1`, [id]);
+  if (!current) return null;
+  if (fields.relation && !['primary', 'co_applicant'].includes(fields.relation)) {
+    throw new Error('relation must be primary or co_applicant');
+  }
+  const res = await query(
+    `UPDATE deal_applicants SET
+        full_name = $2, relation = $3, phone = $4, email = $5, pan = $6, aadhaar = $7, address = $8, notes = $9
+      WHERE id = $1 RETURNING *`,
+    [
+      id,
+      fields.full_name !== undefined ? fields.full_name : current.full_name,
+      fields.relation !== undefined ? fields.relation : current.relation,
+      fields.phone !== undefined ? fields.phone : current.phone,
+      fields.email !== undefined ? fields.email : current.email,
+      fields.pan !== undefined ? fields.pan : current.pan,
+      fields.aadhaar !== undefined ? fields.aadhaar : current.aadhaar,
+      fields.address !== undefined ? fields.address : current.address,
+      fields.notes !== undefined ? fields.notes : current.notes,
+    ],
+  );
+  return res.rows[0];
+}
+
+export async function deleteApplicant(id) {
+  const res = await query(`DELETE FROM deal_applicants WHERE id = $1 RETURNING id`, [id]);
+  return res.rows.length > 0;
+}
+
+export async function listCostItems(dealId) {
+  const res = await query(
+    `SELECT * FROM deal_cost_items WHERE deal_id = $1 ORDER BY sort_order, created_at`, [dealId],
+  );
+  return res.rows;
+}
+
+export async function addCostItem(dealId, { label, amount = 0, sort_order = 0 }) {
+  if (!label || !label.trim()) throw new Error('label is required');
+  const res = await query(
+    `INSERT INTO deal_cost_items (deal_id, label, amount, sort_order) VALUES ($1,$2,$3,$4) RETURNING *`,
+    [dealId, label.trim(), Number(amount) || 0, sort_order],
+  );
+  return res.rows[0];
+}
+
+export async function updateCostItem(id, fields = {}) {
+  const current = await one(`SELECT * FROM deal_cost_items WHERE id = $1`, [id]);
+  if (!current) return null;
+  const res = await query(
+    `UPDATE deal_cost_items SET label = $2, amount = $3 WHERE id = $1 RETURNING *`,
+    [
+      id,
+      fields.label !== undefined ? fields.label : current.label,
+      fields.amount !== undefined ? (Number(fields.amount) || 0) : current.amount,
+    ],
+  );
+  return res.rows[0];
+}
+
+export async function deleteCostItem(id) {
+  const res = await query(`DELETE FROM deal_cost_items WHERE id = $1 RETURNING id`, [id]);
+  return res.rows.length > 0;
+}
+
+export async function listMilestones(dealId) {
+  const res = await query(
+    `SELECT * FROM deal_payment_milestones WHERE deal_id = $1 ORDER BY sort_order, due_date NULLS LAST, created_at`,
+    [dealId],
+  );
+  return res.rows;
+}
+
+export async function addMilestone(dealId, { label, due_date = null, amount = 0, notes = null, sort_order = 0 }) {
+  if (!label || !label.trim()) throw new Error('label is required');
+  const res = await query(
+    `INSERT INTO deal_payment_milestones (deal_id, label, due_date, amount, notes, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [dealId, label.trim(), due_date, Number(amount) || 0, notes, sort_order],
+  );
+  return res.rows[0];
+}
+
+/**
+ * Updating a milestone can mark it paid — when that happens, default
+ * paid_date to today and paid_amount to the full scheduled amount unless the
+ * caller specified otherwise, and drop a note in the lead's activity thread
+ * (via the deal's lead_id) since "payment received" is the one booking event
+ * genuinely worth surfacing there.
+ */
+export async function updateMilestone(id, fields = {}, { actor = 'admin' } = {}) {
+  const current = await one(`SELECT * FROM deal_payment_milestones WHERE id = $1`, [id]);
+  if (!current) return null;
+  if (fields.status && !['pending', 'paid', 'overdue'].includes(fields.status)) {
+    throw new Error('status must be one of pending, paid, overdue');
+  }
+
+  const nextAmount = fields.amount !== undefined ? (Number(fields.amount) || 0) : Number(current.amount);
+  let nextStatus = fields.status !== undefined ? fields.status : current.status;
+  let nextPaidAmount = fields.paid_amount !== undefined ? (Number(fields.paid_amount) || 0) : Number(current.paid_amount);
+  let nextPaidDate = fields.paid_date !== undefined ? fields.paid_date : current.paid_date;
+
+  const becamePaid = nextStatus === 'paid' && current.status !== 'paid';
+  if (becamePaid) {
+    if (fields.paid_amount === undefined) nextPaidAmount = nextAmount;
+    if (fields.paid_date === undefined) nextPaidDate = new Date().toISOString().slice(0, 10);
+  }
+
+  const res = await query(
+    `UPDATE deal_payment_milestones SET
+        label = $2, due_date = $3, amount = $4, paid_amount = $5, paid_date = $6, status = $7, notes = $8
+      WHERE id = $1 RETURNING *`,
+    [
+      id,
+      fields.label !== undefined ? fields.label : current.label,
+      fields.due_date !== undefined ? fields.due_date : current.due_date,
+      nextAmount,
+      nextPaidAmount,
+      nextPaidDate,
+      nextStatus,
+      fields.notes !== undefined ? fields.notes : current.notes,
+    ],
+  );
+
+  if (becamePaid) {
+    const deal = await one(`SELECT lead_id FROM deals WHERE id = $1`, [current.deal_id]);
+    if (deal?.lead_id) {
+      await addEvent(deal.lead_id, {
+        event_type: 'note',
+        note: `Payment received — ${current.label}: ₹${nextPaidAmount}L`,
+        actor,
+      });
+    }
+  }
+  return res.rows[0];
+}
+
+export async function deleteMilestone(id) {
+  const res = await query(`DELETE FROM deal_payment_milestones WHERE id = $1 RETURNING id`, [id]);
+  return res.rows.length > 0;
+}
+
+export async function listDocuments(dealId) {
+  const res = await query(
+    `SELECT * FROM deal_documents WHERE deal_id = $1 ORDER BY sort_order, created_at`, [dealId],
+  );
+  return res.rows;
+}
+
+export async function addDocument(dealId, { name, status = 'pending', reference = null, sort_order = 0 }) {
+  if (!name || !name.trim()) throw new Error('name is required');
+  if (status && !['pending', 'received', 'verified'].includes(status)) {
+    throw new Error('status must be one of pending, received, verified');
+  }
+  const res = await query(
+    `INSERT INTO deal_documents (deal_id, name, status, reference, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [dealId, name.trim(), status, reference, sort_order],
+  );
+  return res.rows[0];
+}
+
+export async function updateDocument(id, fields = {}) {
+  const current = await one(`SELECT * FROM deal_documents WHERE id = $1`, [id]);
+  if (!current) return null;
+  if (fields.status && !['pending', 'received', 'verified'].includes(fields.status)) {
+    throw new Error('status must be one of pending, received, verified');
+  }
+  const res = await query(
+    `UPDATE deal_documents SET name = $2, status = $3, reference = $4 WHERE id = $1 RETURNING *`,
+    [
+      id,
+      fields.name !== undefined ? fields.name : current.name,
+      fields.status !== undefined ? fields.status : current.status,
+      fields.reference !== undefined ? fields.reference : current.reference,
+    ],
+  );
+  return res.rows[0];
+}
+
+export async function deleteDocument(id) {
+  const res = await query(`DELETE FROM deal_documents WHERE id = $1 RETURNING id`, [id]);
+  return res.rows.length > 0;
+}
+
+/**
+ * Everything the Bookings panel needs in one round trip, plus the rollup
+ * numbers (total cost from the cost sheet, total paid/due from the payment
+ * schedule) that turn a list of line items into an actual answer to "how
+ * much is left to collect on this booking".
+ */
+export async function getBooking(dealId) {
+  const [applicants, cost_items, milestones, documents] = await Promise.all([
+    listApplicants(dealId), listCostItems(dealId), listMilestones(dealId), listDocuments(dealId),
+  ]);
+  const total_cost = cost_items.reduce((sum, c) => sum + Number(c.amount), 0);
+  const total_paid = milestones.reduce((sum, m) => sum + Number(m.paid_amount), 0);
+  const total_scheduled = milestones.reduce((sum, m) => sum + Number(m.amount), 0);
+  return {
+    applicants, cost_items, milestones, documents,
+    totals: {
+      total_cost,
+      total_scheduled,
+      total_paid,
+      total_due: Math.max(total_cost - total_paid, 0),
+    },
+  };
+}
+
 /** Summary stats for the Deals page: totals, value, closing soon, win rate. */
 export async function dealStats() {
   const totals = await one(
@@ -103,11 +338,27 @@ export async function dealStats() {
      FROM deals`,
   );
   const closedTotal = Number(totals.won) + Number(totals.lost);
+
+  // Business-wide booking collection numbers — how much the cost sheets
+  // across every deal add up to vs. how much has actually been paid against
+  // the payment schedules. Global sums, not per-deal, so this stays cheap
+  // even as the number of deals grows.
+  const payments = await one(
+    `SELECT
+        (SELECT COALESCE(SUM(amount), 0) FROM deal_cost_items)             AS total_cost,
+        (SELECT COALESCE(SUM(paid_amount), 0) FROM deal_payment_milestones) AS total_paid`,
+  );
+  const total_cost = Number(payments.total_cost);
+  const total_paid = Number(payments.total_paid);
+
   return {
     total_deals: Number(totals.total),
     open_deals: Number(totals.open_deals),
     open_value: Number(totals.open_value),
     closing_this_month: Number(totals.closing_this_month),
     win_rate: closedTotal > 0 ? Math.round((Number(totals.won) / closedTotal) * 1000) / 10 : 0,
+    total_booking_cost: total_cost,
+    total_collected: total_paid,
+    total_due: Math.max(total_cost - total_paid, 0),
   };
 }

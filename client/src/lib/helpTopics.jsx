@@ -174,9 +174,47 @@ export const HELP_TOPICS = [
     ),
   },
   {
+    id: 'tickets',
+    title: 'Support tickets',
+    keywords: 'tickets support department priority status assignee requester urgent open resolved closed',
+    body: (
+      <>
+        <p>
+          A ticket is a discrete, assignable piece of work — a stuck loan sanction letter, a documentation problem, a
+          payments query — distinct from a lead's follow-ups (a simple reminder) or its activity thread (a running
+          log). Set a department, priority, and who it's assigned to; move it through{' '}
+          <strong>Open → In progress → Resolved → Closed</strong> the same way a lead moves through its pipeline.
+        </p>
+        <p>
+          Every status change or note is kept in the ticket's own Activity thread, same pattern as a lead's — so
+          nothing about who did what gets lost once it's marked closed.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'lead-list-polish',
+    title: 'Occurrences, repeat enquiries, and the card view',
+    keywords: 'occurrences duplicates repeat enquiry card view list view grid toggle',
+    body: (
+      <>
+        <p>
+          The <strong>Occ.</strong> column on Leads shows how many times that same phone number has enquired — a
+          quiet ×2 or ×3 badge, not a separate inflated lead. Open the lead and its "Repeat enquiries" section lists
+          each earlier submission (source, date) that got folded into it.
+        </p>
+        <p>
+          The list/card toggle next to the filters switches the Leads page between the classic table and a card grid
+          — same data, same inline Status/Tag editing, just easier to scan on a smaller screen. Your choice is
+          remembered for next time.
+        </p>
+      </>
+    ),
+  },
+  {
     id: 'deals',
-    title: 'Deals',
-    keywords: 'deals negotiation booked closed won lost unit price closing date',
+    title: 'Deals, and the Bookings tabs (applicants, cost sheet, payments, documents)',
+    keywords: 'deals negotiation booked closed won lost unit price closing date bookings applicants co-applicant cost sheet payment milestones documents kyc pan aadhaar',
     body: (
       <>
         <p>
@@ -184,6 +222,25 @@ export const HELP_TOPICS = [
           <strong>Negotiation</strong> or <strong>Closed</strong> status, and carries fields a lead never has: which
           unit, the agreed price, and an expected closing date. Stages run{' '}
           <strong>Negotiation → Booked → Closed won / Closed lost.</strong>
+        </p>
+        <p>
+          Opening a deal gives four more tabs alongside Overview:
+        </p>
+        <h3>Applicants</h3>
+        <p>Primary applicant and any co-applicants on the booking, with contact details.</p>
+        <h3>Cost sheet</h3>
+        <p>Itemized charges — base price, GST, registration, club membership, whatever applies — that add up to the deal's total cost.</p>
+        <h3>Payments</h3>
+        <p>
+          A schedule of milestones (booking amount, on agreement, on possession…), each with a due date and amount.
+          Marking one <strong>Paid</strong> records how much and when, and drops a note in the lead's Activity thread
+          automatically. The Deals page header shows how much has been Collected vs. is still Due across every deal.
+        </p>
+        <h3>Documents</h3>
+        <p>
+          A checklist (Pending / Received / Verified) for paperwork like PAN, sale agreement, loan sanction letter.
+          There's no file upload yet — the reference field is for a plain-text note on where the actual copy is
+          (e.g. "original with reception", "scanned copy emailed 12 Aug").
         </p>
       </>
     ),

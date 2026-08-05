@@ -5,6 +5,7 @@ export const NAV = [
   { key: 'dashboard',  label: 'Dashboard',              icon: 'chart' },
   { key: 'leads',      label: 'Leads',                  icon: 'users' },
   { key: 'deals',      label: 'Deals',                  icon: 'briefcase' },
+  { key: 'tickets',    label: 'Support tickets',        icon: 'ticket' },
   { key: 'developers', label: 'Developers & projects',  icon: 'building' },
   { key: 'forms',      label: 'Lead forms',             icon: 'code' },
   { key: 'ingest',     label: 'Ingest log',             icon: 'inbox' },

@@ -9,6 +9,7 @@ import CreateDealQuickAdd from './components/CreateDealQuickAdd.jsx';
 import LeadsPage from './pages/LeadsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import DealsPage from './pages/DealsPage.jsx';
+import TicketsPage from './pages/TicketsPage.jsx';
 import DevelopersPage from './pages/DevelopersPage.jsx';
 import FormsPage from './pages/FormsPage.jsx';
 import IngestLogPage from './pages/IngestLogPage.jsx';
@@ -171,6 +172,7 @@ export default function App() {
         )}
         {page === 'dashboard' && <DashboardPage leads={leads} report={report} load={load} actingAs={actingAs} />}
         {page === 'deals' && <DealsPage actingAs={actingAs} />}
+        {page === 'tickets' && <TicketsPage reps={reps} actingAs={actingAs} />}
         {page === 'developers' && <DevelopersPage />}
         {page === 'forms' && <FormsPage />}
         {page === 'ingest' && <IngestLogPage />}
@@ -207,6 +209,9 @@ export default function App() {
         <div className={'drawer' + (drawerOpen ? ' open' : '')} onClick={e => e.stopPropagation()}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <h1 style={{ margin: 0 }}>{selected.full_name || 'Unnamed lead'}</h1>
+            {selected.occurrence_count > 1 && (
+              <span className="pill tag-orange" style={{ marginLeft: 4 }}>Enquired {selected.occurrence_count}×</span>
+            )}
             <div className="grow" />
             <LeadActionsMenu
               onEdit={() => setEditingLead(selected)}
@@ -257,6 +262,25 @@ export default function App() {
             <dt>Method</dt><dd><span className={'pill em-' + selected.entry_method}>{selected.entry_method === 'manual' ? 'Manual entry' : 'Automatic (webhook)'}</span></dd>
             {selected.entry_method === 'manual' && (<><dt>Entered by</dt><dd>{selected.created_by || '—'}</dd></>)}
           </dl>
+
+          {selected.duplicates && selected.duplicates.length > 0 && (
+            <>
+              <h2>Repeat enquiries</h2>
+              <p className="muted" style={{ marginTop: -4, marginBottom: 8, fontSize: 11.5 }}>
+                This person submitted more than once — folded into this lead so the count stays honest, without losing the record.
+              </p>
+              {selected.duplicates.map(d => (
+                <div className="list-row" key={d.id}>
+                  <div style={{ flex: 1 }}>
+                    <span className={'pill src-' + d.source}>{d.source}</span>
+                    {d.form_name ? <span className="muted" style={{ marginLeft: 6 }}>{d.form_name}</span> : null}
+                    {d.campaign_name ? <span className="muted" style={{ marginLeft: 6 }}>{d.campaign_name}</span> : null}
+                    <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{fmt(d.created_at)}</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
 
           <h2>Follow-ups</h2>
           {selectedFollowups.map(f => (

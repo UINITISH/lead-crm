@@ -356,6 +356,134 @@ CREATE UNIQUE INDEX IF NOT EXISTS lead_forms_public_id_uniq ON lead_forms (publi
 ALTER TABLE lead_forms ADD COLUMN IF NOT EXISTS fields JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- ---------------------------------------------------------------------------
+-- tickets — internal support tickets (a client-facing issue, an internal
+-- request to accounts/documentation, a site-visit coordination problem…).
+-- Distinct from `follow_ups` (a simple reminder on one lead) and from the
+-- lead activity thread (a running log) — a ticket is a discrete, assignable,
+-- closeable unit of work, optionally linked back to the lead it's about.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tickets (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subject      TEXT NOT NULL,
+  description  TEXT,
+  department   TEXT NOT NULL DEFAULT 'general',
+  priority     TEXT NOT NULL DEFAULT 'medium',
+  status       TEXT NOT NULL DEFAULT 'open',
+  lead_id      UUID REFERENCES leads(id) ON DELETE SET NULL,
+  requester    TEXT,
+  assignee     TEXT,
+  created_by   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at  TIMESTAMPTZ
+);
+DO $$ BEGIN
+  ALTER TABLE tickets ADD CONSTRAINT tickets_department_chk
+    CHECK (department IN ('general', 'sales', 'payments', 'documentation', 'site_visit'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE tickets ADD CONSTRAINT tickets_priority_chk
+    CHECK (priority IN ('low', 'medium', 'high', 'urgent'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE tickets ADD CONSTRAINT tickets_status_chk
+    CHECK (status IN ('open', 'in_progress', 'resolved', 'closed'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS tickets_status_idx    ON tickets (status);
+CREATE INDEX IF NOT EXISTS tickets_priority_idx  ON tickets (priority);
+CREATE INDEX IF NOT EXISTS tickets_assignee_idx  ON tickets (assignee);
+CREATE INDEX IF NOT EXISTS tickets_lead_idx      ON tickets (lead_id);
+CREATE INDEX IF NOT EXISTS tickets_created_idx   ON tickets (created_at DESC);
+
+-- Same audit-trail pattern as lead_events — a status change or a note leaves
+-- a permanent trace instead of silently overwriting the ticket row.
+CREATE TABLE IF NOT EXISTS ticket_events (
+  id          BIGSERIAL PRIMARY KEY,
+  ticket_id   UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  event_type  TEXT NOT NULL,        -- created | status_change | note | assigned
+  from_status TEXT,
+  to_status   TEXT,
+  note        TEXT,
+  actor       TEXT NOT NULL DEFAULT 'system',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ticket_events_ticket_idx ON ticket_events (ticket_id, created_at);
+
+-- ---------------------------------------------------------------------------
+-- Bookings & payment tracking — extends `deals` (a deal IS a booking once it
+-- reaches the "booked" stage) with the paperwork a real booking generates:
+-- who's on the application, what the total cost breaks down to, the payment
+-- schedule against it, and a document checklist. No file-storage infra exists
+-- yet, so deal_documents tracks STATUS + a text reference (e.g. "original
+-- with reception", "scanned copy emailed 12 Aug"), not an actual upload.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS deal_applicants (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  deal_id     UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+  full_name   TEXT NOT NULL,
+  relation    TEXT NOT NULL DEFAULT 'primary',   -- primary | co_applicant
+  phone       TEXT,
+  email       TEXT,
+  pan         TEXT,
+  aadhaar     TEXT,
+  address     TEXT,
+  notes       TEXT,
+  sort_order  INT NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+DO $$ BEGIN
+  ALTER TABLE deal_applicants ADD CONSTRAINT deal_applicants_relation_chk
+    CHECK (relation IN ('primary', 'co_applicant'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS deal_applicants_deal_idx ON deal_applicants (deal_id);
+
+CREATE TABLE IF NOT EXISTS deal_cost_items (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  deal_id     UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+  label       TEXT NOT NULL,          -- e.g. "Base price", "GST", "Registration", "Club membership"
+  amount      NUMERIC NOT NULL DEFAULT 0,   -- ₹ lakhs, same convention as deals.agreed_price
+  sort_order  INT NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS deal_cost_items_deal_idx ON deal_cost_items (deal_id);
+
+CREATE TABLE IF NOT EXISTS deal_payment_milestones (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  deal_id      UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+  label        TEXT NOT NULL,         -- e.g. "Booking amount", "On agreement", "On possession"
+  due_date     DATE,
+  amount       NUMERIC NOT NULL DEFAULT 0,
+  paid_amount  NUMERIC NOT NULL DEFAULT 0,
+  paid_date    DATE,
+  status       TEXT NOT NULL DEFAULT 'pending',   -- pending | paid | overdue
+  notes        TEXT,
+  sort_order   INT NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+DO $$ BEGIN
+  ALTER TABLE deal_payment_milestones ADD CONSTRAINT deal_payment_milestones_status_chk
+    CHECK (status IN ('pending', 'paid', 'overdue'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS deal_payment_milestones_deal_idx ON deal_payment_milestones (deal_id);
+
+CREATE TABLE IF NOT EXISTS deal_documents (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  deal_id     UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,          -- e.g. "PAN card", "Sale agreement", "Loan sanction letter"
+  status      TEXT NOT NULL DEFAULT 'pending',   -- pending | received | verified
+  reference   TEXT,                   -- free text: where the physical/scanned copy actually is
+  sort_order  INT NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+DO $$ BEGIN
+  ALTER TABLE deal_documents ADD CONSTRAINT deal_documents_status_chk
+    CHECK (status IN ('pending', 'received', 'verified'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS deal_documents_deal_idx ON deal_documents (deal_id);
+
+-- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$
@@ -372,4 +500,19 @@ CREATE TRIGGER leads_touch_updated_at
 DROP TRIGGER IF EXISTS deals_touch_updated_at ON deals;
 CREATE TRIGGER deals_touch_updated_at
   BEFORE UPDATE ON deals
+  FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+DROP TRIGGER IF EXISTS tickets_touch_updated_at ON tickets;
+CREATE TRIGGER tickets_touch_updated_at
+  BEFORE UPDATE ON tickets
+  FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+DROP TRIGGER IF EXISTS deal_payment_milestones_touch_updated_at ON deal_payment_milestones;
+CREATE TRIGGER deal_payment_milestones_touch_updated_at
+  BEFORE UPDATE ON deal_payment_milestones
+  FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+DROP TRIGGER IF EXISTS deal_documents_touch_updated_at ON deal_documents;
+CREATE TRIGGER deal_documents_touch_updated_at
+  BEFORE UPDATE ON deal_documents
   FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
