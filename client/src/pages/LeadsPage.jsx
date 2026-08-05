@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '../components/Icon.jsx';
 import { fmt, tagColorClass } from '../lib/format.js';
 import { token } from '../lib/api.js';
 import { STATUSES } from '../constants.js';
 import LeadActionsMenu from '../components/LeadActionsMenu.jsx';
+import Pagination from '../components/Pagination.jsx';
+
+const LEADS_PAGE_SIZE = 50;
 
 /** Splits "Prestige Group, Sumadhura Group" into separate small tags instead of one long string. */
 function DeveloperPills({ developerName, projectName }) {
@@ -49,6 +52,18 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
   const total = leads.length;
   const bySource = (s) => leads.filter(l => l.source === s).length;
   const manual = leads.filter(l => l.entry_method === 'manual').length;
+
+  // Table/card rows are paginated client-side — the leads array here is
+  // already the full filtered set (fetched once), so "page 2" is just a
+  // different slice of it, no extra request. Resets to page 1 whenever the
+  // filters actually change, but NOT on every reload (e.g. after flipping a
+  // single lead's status) — that would be a jarring "why did I jump back to
+  // page 1" every time someone edits something on page 4.
+  const [tablePage, setTablePage] = useState(1);
+  useEffect(() => { setTablePage(1); }, [filters.source, filters.status, filters.tag, filters.q]);
+  const totalPages = Math.max(1, Math.ceil(total / LEADS_PAGE_SIZE));
+  useEffect(() => { if (tablePage > totalPages) setTablePage(totalPages); }, [totalPages, tablePage]);
+  const pageLeads = leads.slice((tablePage - 1) * LEADS_PAGE_SIZE, tablePage * LEADS_PAGE_SIZE);
 
   return (
     <>
@@ -98,7 +113,14 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
         <div className="card"><div className="n" style={{ color: 'var(--pro)' }}>{manual}</div><div className="l">Manual entries</div></div>
       </div>
 
-      <h2>Leads</h2>
+      <h2>
+        Leads
+        {total > 0 && (
+          <span className="muted" style={{ fontWeight: 400, fontSize: 12.5, marginLeft: 8 }}>
+            {(tablePage - 1) * LEADS_PAGE_SIZE + 1}–{Math.min(tablePage * LEADS_PAGE_SIZE, total)} of {total}
+          </span>
+        )}
+      </h2>
 
       {view === 'table' ? (
         <table>
@@ -107,7 +129,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
             <th>Phone</th><th>Budget</th><th>Status</th><th>Tag</th><th>Occ.</th><th></th>
           </tr></thead>
           <tbody>
-            {leads.map(l => (
+            {pageLeads.map(l => (
               <tr key={l.id} onClick={() => open(l.id)}>
                 <td className="muted">{fmt(l.created_at)}</td>
                 <td><span className={'pill src-' + l.source}>{l.source}</span></td>
@@ -144,7 +166,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
         </table>
       ) : (
         <div className="cards" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))' }}>
-          {leads.map(l => (
+          {pageLeads.map(l => (
             <div className="card" key={l.id} style={{ cursor: 'pointer' }} onClick={() => open(l.id)}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -176,6 +198,8 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
           {loading && <div className="empty" style={{ gridColumn: '1/-1' }}>Loading…</div>}
         </div>
       )}
+
+      <Pagination page={tablePage} totalPages={totalPages} onPageChange={setTablePage} />
     </>
   );
 }

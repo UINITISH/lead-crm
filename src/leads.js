@@ -196,7 +196,7 @@ export async function updateStatus(businessId, leadId, newStatus, { actor = 'use
   return res.rows[0];
 }
 
-export async function listLeads(businessId, filters = {}) {
+function buildLeadWhere(businessId, filters) {
   const params = [businessId];
   const where = ['l.business_id = $1'];
   const add = (clause, value) => { params.push(value); where.push(clause.replace('?', `$${params.length}`)); };
@@ -217,12 +217,18 @@ export async function listLeads(businessId, filters = {}) {
   if (!filters.include_duplicates) where.push('is_duplicate = FALSE');
   if (!filters.include_test)       where.push('is_test = FALSE');
 
+  return { params, whereSql: where.join(' AND ') };
+}
+
+export async function listLeads(businessId, filters = {}) {
+  const { params, whereSql } = buildLeadWhere(businessId, filters);
+
   const sql = `SELECT l.*,
       (1 + (SELECT COUNT(*) FROM leads d WHERE d.duplicate_of = l.id AND d.business_id = l.business_id))::int AS occurrence_count
     FROM leads l
-    WHERE ${where.join(' AND ')}
+    WHERE ${whereSql}
     ORDER BY created_at DESC
-    LIMIT ${Math.min(Number(filters.limit) || 5000, 5000)}
+    LIMIT ${Math.min(Number(filters.limit) || 5000, 20_000)}
     OFFSET ${Number(filters.offset) || 0}`;
 
   const res = await query(sql, params);
