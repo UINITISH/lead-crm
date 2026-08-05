@@ -222,7 +222,7 @@ export async function listLeads(businessId, filters = {}) {
     FROM leads l
     WHERE ${where.join(' AND ')}
     ORDER BY created_at DESC
-    LIMIT ${Math.min(Number(filters.limit) || 200, 1000)}
+    LIMIT ${Math.min(Number(filters.limit) || 5000, 5000)}
     OFFSET ${Number(filters.offset) || 0}`;
 
   const res = await query(sql, params);
