@@ -15,8 +15,23 @@
  */
 import express from 'express';
 import crypto from 'node:crypto';
+import { waitUntil } from '@vercel/functions';
 import { insertLead, logIngest } from '../leads.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
+
+/**
+ * On a normal long-running server (Render, a VPS) a plain fire-and-forget
+ * promise after res.sendStatus(200) keeps running fine — the process stays
+ * alive regardless. On Vercel's serverless runtime, the function can be
+ * frozen the instant the response is sent, silently killing that work
+ * mid-flight. If we're actually running on Vercel (process.env.VERCEL is set
+ * by their platform), tell it to keep the function alive until `promise`
+ * settles via @vercel/functions' waitUntil; everywhere else this is a no-op
+ * and behaviour is unchanged from before.
+ */
+function runInBackground(promise) {
+  if (process.env.VERCEL) waitUntil(promise);
+}
 
 export const metaRouter = express.Router();
 
@@ -72,10 +87,11 @@ metaRouter.post('/meta/webhook', async (req, res) => {
   }
 
   for (const value of jobs) {
-    processLeadgen(value).catch((err) => {
+    const job = processLeadgen(value).catch((err) => {
       console.error('[meta] processing failed:', err);
       logIngest({ source: 'meta', outcome: 'error', reason: err.message, payload: value });
     });
+    runInBackground(job);
   }
 });
 
