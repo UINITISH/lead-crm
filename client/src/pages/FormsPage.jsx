@@ -324,10 +324,13 @@ export default function FormsPage() {
     load();
   }
 
-  async function previewSaved(form) {
-    const r = await fetch(embedUrl(form.public_id));
-    const html = await r.text();
-    openHtmlInNewTab(html);
+  // Open the real, live URL directly — not a fetched-then-reconstructed blob
+  // copy. A saved form is a normal server-rendered page with a real <form
+  // action="/f/:id/submit">; navigating straight to it guarantees the submit
+  // button posts to the actual endpoint. (Unsaved drafts still need the blob
+  // trick, since there's no saved public_id to link to yet — see previewDraft.)
+  function previewSaved(form) {
+    window.open(embedUrl(form.public_id), '_blank');
   }
 
   return (
