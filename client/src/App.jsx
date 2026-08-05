@@ -141,7 +141,6 @@ function Dashboard({ onLogout }) {
       <div className="sidebar">
         <div className="brand">
           <p className="name">{companyName}</p>
-          <p className="tag">Phase 1</p>
         </div>
         {NAV.map(n => (
           <button key={n.key} className={'nav-item' + (page === n.key ? ' active' : '')}
