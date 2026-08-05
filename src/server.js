@@ -45,6 +45,15 @@ app.use('/f', publicFormRouter);
 
 app.use(express.static(path.join(here, '..', 'public')));
 
+// SPA fallback — vanity login URLs (findmigo.com/<business-slug>) aren't real
+// files, they're client-side routes the React app itself reads from
+// location.pathname. Anything that isn't an API route and isn't a static
+// asset that actually exists gets index.html, same as Vercel's rewrite does
+// in production (see vercel.json).
+app.get('*', (req, res) => {
+  res.sendFile(path.join(here, '..', 'public', 'index.html'));
+});
+
 app.use((err, _req, res, _next) => {
   console.error('[unhandled]', err);
   res.status(500).json({ ok: false, error: 'Internal error' });

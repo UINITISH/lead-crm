@@ -16,11 +16,11 @@ export function token() { return TOKEN; }
 export function business() { return BUSINESS; }
 export function isLoggedIn() { return Boolean(TOKEN); }
 
-export async function login(email, password) {
+export async function login(email, password, slug) {
   const r = await fetch('/api/admin/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, slug: slug || undefined }),
   });
   const j = await r.json();
   if (!r.ok || !j.ok) throw new Error(j.error || 'Login failed');
@@ -29,6 +29,14 @@ export async function login(email, password) {
   localStorage.setItem('crm_session', TOKEN);
   localStorage.setItem('crm_business', JSON.stringify(BUSINESS));
   return BUSINESS;
+}
+
+/** For the login page's vanity-URL branding (findmigo.com/<slug>) — public, no auth needed. */
+export async function getBusinessBySlug(slug) {
+  const r = await fetch('/api/admin/business-by-slug/' + encodeURIComponent(slug));
+  if (!r.ok) return null;
+  const j = await r.json();
+  return j.ok ? j.business : null;
 }
 
 export function logout() {

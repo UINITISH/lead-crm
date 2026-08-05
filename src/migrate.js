@@ -10,7 +10,7 @@ import { initDb, exec, query, closeDb } from './db.js';
 import { seedDeveloperDirectory } from './developers.js';
 import { seedDefaultTags } from './tags.js';
 import { backfillPhoneField } from './forms.js';
-import { getDefaultBusinessId } from './auth.js';
+import { getDefaultBusinessId, backfillBusinessSlugs } from './auth.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,6 +74,7 @@ export async function migrate() {
   const businessId = await ensureDefaultBusinessAndBackfill();
   await seedDefaultTags(businessId);
   await backfillPhoneField();
+  await backfillBusinessSlugs();
 }
 
 // pathToFileURL, not string concatenation — a space in the path (e.g. anything

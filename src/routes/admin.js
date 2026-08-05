@@ -39,7 +39,7 @@ import {
   createTicket, listTickets, getTicket, updateTicket, deleteTicket, ticketStats,
 } from '../tickets.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
-import { authenticateBusiness, issueSessionToken, verifySessionToken } from '../auth.js';
+import { authenticateBusiness, issueSessionToken, verifySessionToken, findBusinessBySlug } from '../auth.js';
 
 const toNum = (v) => {
   if (v === undefined || v === null || v === '') return null;
@@ -55,14 +55,27 @@ export const adminRouter = express.Router();
  * already being logged in.
  */
 adminRouter.post('/auth/login', async (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, slug } = req.body || {};
   if (!cleanText(email) || !password) {
     return res.status(400).json({ ok: false, error: 'Email and password are required' });
   }
   const business = await authenticateBusiness(email, password);
   if (!business) return res.status(401).json({ ok: false, error: 'Incorrect email or password' });
+  // A vanity login link (findmigo.com/<slug>) is scoped to one business — if
+  // this attempt came in on someone else's link, refuse it rather than
+  // silently logging them into the account the URL points at.
+  if (slug && business.slug !== slug) {
+    return res.status(401).json({ ok: false, error: 'This login link belongs to a different account' });
+  }
   const token = issueSessionToken(business);
   res.json({ ok: true, token, business: { id: business.id, name: business.name, email: business.email } });
+});
+
+/** Public — lets the login page show "Sign in to <business>" for a vanity URL, without exposing anything sensitive. */
+adminRouter.get('/business-by-slug/:slug', async (req, res) => {
+  const business = await findBusinessBySlug(req.params.slug);
+  if (!business) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, business: { name: business.name, slug: business.slug } });
 });
 
 /** Every route below this line requires a valid session and runs scoped to req.business_id. */

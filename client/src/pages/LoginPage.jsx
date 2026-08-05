@@ -1,5 +1,11 @@
-import { useState } from 'react';
-import { login } from '../lib/api.js';
+import { useEffect, useState } from 'react';
+import { login, getBusinessBySlug } from '../lib/api.js';
+
+/** findmigo.com/core-value-realty -> "core-value-realty"; findmigo.com/ -> null. */
+function slugFromUrl() {
+  const seg = window.location.pathname.split('/').filter(Boolean)[0];
+  return seg ? seg.toLowerCase() : null;
+}
 
 /**
  * Full-page property backdrop — a stylised modern glass-facade building
@@ -73,13 +79,20 @@ export default function LoginPage({ onSuccess }) {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [slug] = useState(slugFromUrl);
+  const [bizName, setBizName] = useState(null);
+
+  useEffect(() => {
+    if (!slug) return;
+    getBusinessBySlug(slug).then((biz) => setBizName(biz ? biz.name : false));
+  }, [slug]);
 
   async function submit(e) {
     e.preventDefault();
     setErr(null);
     setBusy(true);
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, bizName ? slug : null);
       onSuccess();
     } catch (e2) {
       setErr(e2.message);
@@ -98,14 +111,16 @@ export default function LoginPage({ onSuccess }) {
           </svg>
         </div>
         <div className="login-logo-text">
-          <div className="name">Findmigo</div>
-          <div className="tag">CRM</div>
+          <div className="name">{bizName ? bizName : 'Findmigo'}</div>
+          <div className="tag">{bizName ? 'CRM · powered by Findmigo' : 'CRM'}</div>
         </div>
       </div>
 
       <div className="login-card-zone">
         <form onSubmit={submit} className="login-card">
-          <h1 style={{ marginTop: 0, marginBottom: 4, fontSize: 23, fontWeight: 700 }}>Sign in</h1>
+          <h1 style={{ marginTop: 0, marginBottom: 4, fontSize: 23, fontWeight: 700 }}>
+            {bizName ? `Sign in to ${bizName}` : 'Sign in'}
+          </h1>
           <p className="muted" style={{ marginTop: 0, marginBottom: 24, fontSize: 13 }}>
             Please enter your business account details.
           </p>

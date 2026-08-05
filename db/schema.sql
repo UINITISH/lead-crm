@@ -37,6 +37,14 @@ CREATE TABLE IF NOT EXISTS businesses (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS businesses_email_uniq ON businesses (LOWER(email));
 
+-- URL-friendly identifier so a client can be handed their own login link,
+-- e.g. findmigo.com/core-value-realty — purely a vanity/branding path, NOT
+-- the auth boundary (that's still email+password → business_id from the
+-- session token). Nullable + partial unique index so older rows without one
+-- yet don't collide with each other on NULL = NULL.
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS slug TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS businesses_slug_uniq ON businesses (slug) WHERE slug IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
 -- projects
 -- ---------------------------------------------------------------------------

@@ -48,6 +48,8 @@ console.log(created ? '\nCreated new business:' : '\nUpdated existing business:'
 console.log(`  id:    ${business.id}`);
 console.log(`  name:  ${business.name}`);
 console.log(`  email: ${business.email}`);
-console.log(`\nThey can log in at your app's URL with this email and the password you just set.\n`);
+console.log(`  slug:  ${business.slug}`);
+console.log(`\nThey can log in with this email and the password you just set, either at your`);
+console.log(`app's root URL, or at their own vanity link: https://www.findmigo.com/${business.slug}\n`);
 
 await closeDb();

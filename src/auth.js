@@ -91,6 +91,43 @@ export async function findBusinessByEmail(email) {
   return one(`SELECT * FROM businesses WHERE LOWER(email) = LOWER($1)`, [email]);
 }
 
+export async function findBusinessBySlug(slug) {
+  if (!slug) return null;
+  return one(`SELECT id, name, slug FROM businesses WHERE slug = LOWER($1) AND is_active = TRUE`, [slug]);
+}
+
+/** "Core Value Realty RE" -> "core-value-realty-re". Used for the login-link slug. */
+export function slugify(name) {
+  return String(name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'business';
+}
+
+/** Appends -2, -3, … until it finds a slug not already taken by another business. */
+async function uniqueSlug(base, excludeId = null) {
+  let candidate = base;
+  let n = 2;
+  for (;;) {
+    const clash = excludeId
+      ? await one(`SELECT id FROM businesses WHERE slug = $1 AND id <> $2`, [candidate, excludeId])
+      : await one(`SELECT id FROM businesses WHERE slug = $1`, [candidate]);
+    if (!clash) return candidate;
+    candidate = `${base}-${n++}`;
+  }
+}
+
+/** One-time backfill for rows created before the slug column existed. */
+export async function backfillBusinessSlugs() {
+  const rows = await query(`SELECT id, name FROM businesses WHERE slug IS NULL`);
+  for (const row of rows.rows) {
+    const slug = await uniqueSlug(slugify(row.name), row.id);
+    await query(`UPDATE businesses SET slug = $1 WHERE id = $2`, [slug, row.id]);
+  }
+}
+
 export async function getBusiness(id) {
   return one(`SELECT * FROM businesses WHERE id = $1`, [id]);
 }
@@ -122,15 +159,17 @@ export async function upsertBusiness({ name, email, password }) {
   const existing = await findBusinessByEmail(email);
   const password_hash = hashPassword(password);
   if (existing) {
+    const slug = existing.slug || (await uniqueSlug(slugify(name || existing.name), existing.id));
     const res = await query(
-      `UPDATE businesses SET name = $1, password_hash = $2 WHERE id = $3 RETURNING id, name, email, created_at`,
-      [name || existing.name, password_hash, existing.id],
+      `UPDATE businesses SET name = $1, password_hash = $2, slug = $4 WHERE id = $3 RETURNING id, name, email, slug, created_at`,
+      [name || existing.name, password_hash, existing.id, slug],
     );
     return { business: res.rows[0], created: false };
   }
+  const slug = await uniqueSlug(slugify(name));
   const res = await query(
-    `INSERT INTO businesses (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, created_at`,
-    [name, email, password_hash],
+    `INSERT INTO businesses (name, email, password_hash, slug) VALUES ($1, $2, $3, $4) RETURNING id, name, email, slug, created_at`,
+    [name, email, password_hash, slug],
   );
   return { business: res.rows[0], created: true };
 }
