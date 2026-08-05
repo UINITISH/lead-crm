@@ -163,7 +163,7 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--
 /* Login page — a full-bleed property photograph-style background (rendered
    as SVG, no external image dependency) with the brand mark top-left and the
    sign-in card floating over the left third, vertically centered. */
-.login-page { min-height:100vh; position:relative; overflow:hidden;
+.login-page { min-height:100vh; width:100%; flex:1; position:relative; overflow:hidden;
   display:flex; align-items:center; background:#eef1f5; }
 .login-bg { position:absolute; inset:0; width:100%; height:100%; z-index:0; }
 .login-logo { position:absolute; top:34px; left:44px; z-index:2; display:flex; align-items:center; gap:12px; }
