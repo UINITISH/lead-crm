@@ -98,7 +98,7 @@ export default function LoginPage({ onSuccess }) {
           </svg>
         </div>
         <div className="login-logo-text">
-          <div className="name">Core Value Realty</div>
+          <div className="name">Findmigo</div>
           <div className="tag">CRM</div>
         </div>
       </div>

@@ -43,7 +43,7 @@ function Dashboard({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [actingAs, setActingAs] = useState(sessionStorage.getItem('crm_actor') || '');
-  const [companyName, setCompanyName] = useState('Core Value Realty');
+  const [companyName, setCompanyName] = useState('Findmigo');
   const [reps, setReps] = useState([]);
   const [tags, setTags] = useState([]);
 
@@ -55,7 +55,7 @@ function Dashboard({ onLogout }) {
     async function loadMeta() {
       try {
         const [s, r, t] = await Promise.all([api('/settings'), api('/reps?active_only=1'), api('/tags?active_only=1')]);
-        setCompanyName(s.settings?.company_name || 'Core Value Realty');
+        setCompanyName(s.settings?.company_name || 'Findmigo');
         setReps(r.reps || []);
         setTags(t.tags || []);
       } catch { /* sidebar falls back to defaults */ }
