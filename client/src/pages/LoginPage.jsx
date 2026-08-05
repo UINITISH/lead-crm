@@ -1,66 +1,68 @@
 import { useState } from 'react';
 import { login } from '../lib/api.js';
 
-/** City-skyline silhouette, purely decorative — sets a property/real-estate
-    tone without depending on any external image asset. */
-function SkylineBackground() {
+/**
+ * Full-page property backdrop — a stylised modern glass-facade building
+ * against a soft sky, rendered as SVG so there's no external image asset to
+ * host or fetch. Purely decorative (aria-hidden).
+ */
+function PropertyBackground() {
   return (
-    <svg viewBox="0 0 900 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <svg
+      className="login-bg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice"
+      xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+    >
       <defs>
-        <radialGradient id="glow" cx="72%" cy="18%" r="55%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.16" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0c1f45" stopOpacity="0" />
-          <stop offset="100%" stopColor="#0c1f45" stopOpacity="0.55" />
+        <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#eef2f7" />
+          <stop offset="55%" stopColor="#e4e9f0" />
+          <stop offset="100%" stopColor="#c9d2dd" />
+        </linearGradient>
+        <linearGradient id="panelA" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#f4f6f9" />
+          <stop offset="100%" stopColor="#c3ccd9" />
+        </linearGradient>
+        <linearGradient id="panelB" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#dfe5ec" />
+          <stop offset="100%" stopColor="#aab5c4" />
+        </linearGradient>
+        <linearGradient id="panelC" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#c7d0dc" />
+          <stop offset="100%" stopColor="#8b98ab" />
         </linearGradient>
       </defs>
-      <rect x="0" y="0" width="900" height="700" fill="url(#glow)" />
-      <circle cx="650" cy="120" r="70" fill="#ffffff" opacity="0.06" />
 
-      {/* Back row — shorter, dimmer buildings */}
-      <g fill="#ffffff" opacity="0.10">
-        <rect x="0" y="430" width="70" height="270" />
-        <rect x="90" y="380" width="55" height="320" />
-        <rect x="165" y="460" width="90" height="240" />
-        <rect x="275" y="400" width="65" height="300" />
-        <rect x="360" y="440" width="80" height="260" />
-        <rect x="460" y="390" width="60" height="310" />
-        <rect x="540" y="430" width="95" height="270" />
-        <rect x="650" y="360" width="70" height="340" />
-        <rect x="735" y="410" width="60" height="290" />
-        <rect x="810" y="450" width="90" height="250" />
+      <rect x="0" y="0" width="1600" height="1000" fill="url(#sky)" />
+
+      {/* Faceted glass tower, leaning across the right two-thirds of the frame */}
+      <g opacity="0.94">
+        <polygon points="760,1000 900,120 1120,60 1600,1000" fill="url(#panelA)" />
+        <polygon points="1000,1000 1120,60 1310,140 1250,1000" fill="url(#panelB)" />
+        <polygon points="1220,1000 1310,140 1470,230 1520,1000" fill="url(#panelC)" />
       </g>
 
-      {/* Front row — taller, brighter, with lit windows */}
-      <g fill="#ffffff" opacity="0.22">
-        <rect x="20" y="500" width="80" height="200" />
-        <rect x="120" y="440" width="60" height="260" />
-        <rect x="200" y="520" width="100" height="180" rx="2" />
-        <rect x="320" y="380" width="70" height="320" />
-        <rect x="410" y="470" width="85" height="230" />
-        <rect x="515" y="410" width="65" height="290" />
-        <rect x="600" y="500" width="110" height="200" />
-        <rect x="730" y="450" width="75" height="250" />
-        <rect x="825" y="510" width="75" height="190" />
+      {/* Mullion grid — thin lines suggesting glass panes across the facade */}
+      <g stroke="#ffffff" strokeOpacity="0.55" strokeWidth="2">
+        {Array.from({ length: 16 }).map((_, i) => {
+          const x = 800 + i * 52;
+          return <line key={'v' + i} x1={x} y1={90 + i * 4} x2={x - 90} y2="1000" />;
+        })}
+        {Array.from({ length: 13 }).map((_, i) => {
+          const y = 130 + i * 68;
+          return <line key={'h' + i} x1={780 + i * 10} y1={y} x2={1550} y2={y - i * 6} />;
+        })}
       </g>
 
-      {/* Windows */}
-      <g fill="#ffd479" opacity="0.55">
-        {[
-          [30, 520], [30, 550], [30, 580], [30, 610], [55, 520], [55, 550], [55, 580],
-          [135, 460], [135, 490], [135, 520], [135, 550], [155, 460], [155, 490], [155, 550],
-          [330, 400], [330, 430], [330, 460], [355, 400], [355, 460], [355, 490],
-          [425, 500], [425, 530], [450, 500], [450, 560],
-          [530, 440], [530, 470], [530, 500], [550, 440], [550, 500],
-          [615, 530], [615, 560], [615, 590], [645, 530], [645, 590], [670, 530], [670, 560],
-          [745, 480], [745, 510], [745, 540], [770, 480], [770, 540],
-          [840, 540], [840, 570], [860, 540], [860, 600],
-        ].map(([x, y], i) => <rect key={i} x={x} y={y} width="8" height="12" />)}
+      {/* Balcony bands — angled ledges catching the light, echoing the tower's lean */}
+      <g fill="#ffffff" opacity="0.5">
+        <polygon points="900,340 1560,340 1560,352 880,352" />
+        <polygon points="870,520 1560,520 1560,534 850,534" />
+        <polygon points="830,700 1560,700 1560,716 805,716" />
+        <polygon points="785,880 1560,880 1560,898 758,898" />
       </g>
 
-      <rect x="0" y="560" width="900" height="140" fill="url(#fade)" />
+      {/* Soft ground shadow */}
+      <rect x="0" y="960" width="1600" height="40" fill="#8b98ab" opacity="0.25" />
     </svg>
   );
 }
@@ -87,34 +89,25 @@ export default function LoginPage({ onSuccess }) {
 
   return (
     <div className="login-page">
-      <div className="login-hero">
-        <SkylineBackground />
-        <div className="login-hero-content">
-          <div className="login-hero-mark">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M3 21V9.5L12 3l9 6.5V21H14v-7h-4v7H3z" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <h1>Every lead, deal, and client — in one place.</h1>
-          <p>Sign in to your business's private workspace. Your data stays completely separate from every other client's.</p>
-          <ul className="login-hero-features">
-            <li><span className="tick">✓</span> Track leads from enquiry to closing</li>
-            <li><span className="tick">✓</span> Manage bookings, payments &amp; documents</li>
-            <li><span className="tick">✓</span> Your own private, isolated workspace</li>
-          </ul>
+      <PropertyBackground />
+
+      <div className="login-logo">
+        <div className="login-logo-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M3 21V9.5L12 3l9 6.5V21H14v-7h-4v7H3z" stroke="#1c2534" strokeWidth="1.7" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <div className="login-logo-text">
+          <div className="name">Core Value Realty</div>
+          <div className="tag">CRM</div>
         </div>
       </div>
 
-      <div className="login-form-panel">
-        <form onSubmit={submit} className="card" style={{ width: '100%', maxWidth: 380, padding: 32 }}>
-          <div className="login-card-mark">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M3 21V9.5L12 3l9 6.5V21H14v-7h-4v7H3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <h1 style={{ marginTop: 0, marginBottom: 4, fontSize: 21 }}>Sign in</h1>
-          <p className="muted" style={{ marginTop: 0, marginBottom: 22, fontSize: 13 }}>
-            Welcome back — log in with your business account.
+      <div className="login-card-zone">
+        <form onSubmit={submit} className="login-card">
+          <h1 style={{ marginTop: 0, marginBottom: 4, fontSize: 23, fontWeight: 700 }}>Sign in</h1>
+          <p className="muted" style={{ marginTop: 0, marginBottom: 24, fontSize: 13 }}>
+            Please enter your business account details.
           </p>
 
           {err && <div className="form-error" style={{ marginBottom: 14 }}>{err}</div>}
@@ -124,16 +117,23 @@ export default function LoginPage({ onSuccess }) {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                    autoComplete="username" required autoFocus placeholder="you@business.com" />
           </div>
-          <div className="field" style={{ marginBottom: 4 }}>
+          <div className="field" style={{ marginBottom: 6 }}>
             <label>Password</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                    autoComplete="current-password" required placeholder="••••••••" />
           </div>
 
-          <button type="submit" className="primary" disabled={busy || !email.trim() || !password}
-                  style={{ width: '100%', marginTop: 20, padding: '10px 0', fontSize: 14 }}>
+          <button type="submit" disabled={busy || !email.trim() || !password}
+                  style={{
+                    width: '100%', marginTop: 18, padding: '11px 0', fontSize: 14, fontWeight: 600,
+                    background: '#1c2534', borderColor: '#1c2534', color: '#fff', borderRadius: 8,
+                  }}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
+
+          <p className="muted" style={{ marginTop: 18, marginBottom: 0, fontSize: 12, textAlign: 'center' }}>
+            Trouble signing in? Contact whoever set up your account.
+          </p>
         </form>
       </div>
     </div>

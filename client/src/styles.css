@@ -160,24 +160,19 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--
 .activity-add { display:flex; gap:8px; margin:10px 0 14px; }
 .activity-add textarea { flex:1; min-height:0; height:38px; resize:vertical; font-family:inherit; }
 
-/* Login page — split layout: a property-themed hero on the left, the sign-in
-   card centered on the right. Collapses to just the form on narrow screens. */
-.login-page { min-height:100vh; display:flex; background:#fff; }
-.login-hero {
-  flex:1.15; position:relative; overflow:hidden; display:flex; align-items:flex-end;
-  padding:56px; background:linear-gradient(160deg,#0c1f45 0%,#173a7a 48%,#2f6fed 100%);
-}
-.login-hero svg { position:absolute; inset:0; width:100%; height:100%; }
-.login-hero-content { position:relative; z-index:1; color:#fff; max-width:420px; }
-.login-hero-mark { width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.14);
-  display:flex; align-items:center; justify-content:center; margin-bottom:22px; }
-.login-hero-content h1 { font-size:28px; line-height:1.25; margin:0 0 12px; font-weight:600; }
-.login-hero-content p { margin:0 0 26px; color:rgba(255,255,255,.72); font-size:14px; line-height:1.6; }
-.login-hero-features { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px; }
-.login-hero-features li { display:flex; align-items:center; gap:10px; font-size:13px; color:rgba(255,255,255,.88); }
-.login-hero-features .tick { width:18px; height:18px; border-radius:50%; background:rgba(255,255,255,.16);
-  display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.login-form-panel { flex:1; display:flex; align-items:center; justify-content:center; padding:40px 24px; }
-.login-card-mark { width:44px; height:44px; border-radius:11px; background:var(--accent-bg);
-  color:var(--accent); display:flex; align-items:center; justify-content:center; margin-bottom:18px; }
-@media (max-width:880px) { .login-hero { display:none; } }
+/* Login page — a full-bleed property photograph-style background (rendered
+   as SVG, no external image dependency) with the brand mark top-left and the
+   sign-in card floating over the left third, vertically centered. */
+.login-page { min-height:100vh; position:relative; overflow:hidden;
+  display:flex; align-items:center; background:#eef1f5; }
+.login-bg { position:absolute; inset:0; width:100%; height:100%; z-index:0; }
+.login-logo { position:absolute; top:34px; left:44px; z-index:2; display:flex; align-items:center; gap:12px; }
+.login-logo-mark { width:38px; height:38px; border-radius:9px; background:rgba(255,255,255,.72);
+  backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 14px rgba(15,23,42,.10); flex-shrink:0; }
+.login-logo-text .name { font-size:17px; font-weight:700; letter-spacing:.3px; color:#1c2534; line-height:1.15; }
+.login-logo-text .tag { font-size:10px; font-weight:600; letter-spacing:2.5px; color:#5b6472; margin-top:2px; }
+.login-card-zone { position:relative; z-index:1; width:100%; display:flex; padding:0 5vw; }
+.login-card { background:#fff; border-radius:16px; box-shadow:0 30px 80px rgba(15,23,42,.20);
+  padding:38px 34px; width:100%; max-width:392px; }
+@media (max-width:640px) { .login-card-zone { padding:0 20px; justify-content:center; } .login-card { max-width:400px; } }
