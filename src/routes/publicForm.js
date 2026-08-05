@@ -280,7 +280,7 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
   const attr = extractAttribution(req.query || {});
 
   try {
-    const { lead, outcome } = await insertLead({
+    const { lead, outcome } = await insertLead(form.business_id, {
       full_name,
       phone_raw: cleanText(body.phone, 50),
       phone_e164,
@@ -298,14 +298,14 @@ publicFormRouter.post('/:public_id/submit', async (req, res) => {
     });
 
     if (hasField('message') && cleanText(body.message)) {
-      await addEvent(lead.id, { event_type: 'note', note: `Message from form: ${cleanText(body.message, 2000)}`, actor: 'system' });
+      await addEvent(form.business_id, lead.id, { event_type: 'note', note: `Message from form: ${cleanText(body.message, 2000)}`, actor: 'system' });
     }
     if (customAnswers.length) {
       const note = customAnswers.map((a) => `${a.label}: ${a.value}`).join(' · ');
-      await addEvent(lead.id, { event_type: 'note', note: `Form answers — ${note}`, actor: 'system' });
+      await addEvent(form.business_id, lead.id, { event_type: 'note', note: `Form answers — ${note}`, actor: 'system' });
     }
 
-    await logIngest({ source: 'website', outcome, lead_id: lead.id, http_status: 201, payload: body });
+    await logIngest(form.business_id, { source: 'website', outcome, lead_id: lead.id, http_status: 201, payload: body });
 
     return res.send(page({
       title: form.name,

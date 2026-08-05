@@ -15,11 +15,18 @@ import FormsPage from './pages/FormsPage.jsx';
 import IngestLogPage from './pages/IngestLogPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import HelpPage from './pages/HelpPage.jsx';
-import { api } from './lib/api.js';
+import LoginPage from './pages/LoginPage.jsx';
+import { api, isLoggedIn, logout, business } from './lib/api.js';
 import { fmt, fmtINR, tagColorClass } from './lib/format.js';
 import { STATUSES, NAV, DEAL_STAGE_LABELS, DEAL_ELIGIBLE_STATUSES } from './constants.js';
 
 export default function App() {
+  const [loggedIn, setLoggedIn] = useState(isLoggedIn());
+  if (!loggedIn) return <LoginPage onSuccess={() => setLoggedIn(true)} />;
+  return <Dashboard onLogout={() => setLoggedIn(false)} />;
+}
+
+function Dashboard({ onLogout }) {
   const [page, setPage] = useState('dashboard');
   const [leads, setLeads] = useState([]);
   const [report, setReport] = useState([]);
@@ -160,6 +167,19 @@ export default function App() {
           <p style={{ margin: '6px 0 0', fontSize: 10.5 }}>
             {reps.length > 0 ? 'Add or remove reps from Settings → Team.' : 'Add your team under Settings → Team.'}
           </p>
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+            {business()?.email && (
+              <p className="muted" style={{ margin: '0 0 6px', fontSize: 10.5, wordBreak: 'break-all' }}>
+                {business().email}
+              </p>
+            )}
+            <button
+              onClick={() => { logout(); onLogout(); }}
+              style={{ width: '100%', fontSize: 12, padding: '6px 8px' }}
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </div>
 

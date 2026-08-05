@@ -21,13 +21,20 @@ process.env.WEBSITE_INGEST_SECRET = 'test-secret';
 process.env.GOOGLE_WEBHOOK_KEY = 'test-google-key';
 process.env.META_APP_SECRET = 'test-meta-secret';
 process.env.META_VERIFY_TOKEN = 'test-verify';
-process.env.ADMIN_TOKEN = 'test-admin';
+process.env.SESSION_SECRET = 'test-session-secret';
+// migrate() creates exactly one default business on first boot, using these —
+// deliberately test-specific rather than the real nk7823454@gmail.com default,
+// so this suite never depends on (or could ever touch) production data.
+process.env.DEFAULT_BUSINESS_NAME = 'Test Business One';
+process.env.DEFAULT_BUSINESS_EMAIL = 'business-one@test.local';
 
 await rm(TEST_DIR, { recursive: true, force: true });
 
 const { start } = await import('../src/server.js');
 const { processLeadgen } = await import('../src/routes/meta.js');
 const { closeDb } = await import('../src/db.js');
+const { upsertBusiness } = await import('../src/auth.js');
+const { seedDefaultTags } = await import('../src/tags.js');
 
 const BASE = `http://127.0.0.1:${process.env.PORT}`;
 const server = await start();
@@ -39,7 +46,26 @@ function check(name, ok, detail = '') {
 }
 
 const sign = (body, secret) => crypto.createHmac('sha256', secret).update(body).digest('hex');
-const admin = (p) => fetch(BASE + p, { headers: { Authorization: 'Bearer test-admin' } }).then(r => r.json());
+
+// migrate() (called by start()) already created "business-one@test.local"
+// with no password — set one now so this suite can actually log in as it,
+// the same way scripts/create-business.js would for a real client.
+const { business: businessOne } = await upsertBusiness({
+  name: 'Test Business One', email: 'business-one@test.local', password: 'test-password-one',
+});
+
+async function login(email, password) {
+  const r = await fetch(`${BASE}/api/admin/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(`login failed for ${email}: ${j.error}`);
+  return j.token;
+}
+
+const TOKEN = await login('business-one@test.local', 'test-password-one');
+const admin = (p, tok = TOKEN) => fetch(BASE + p, { headers: { Authorization: 'Bearer ' + tok } }).then(r => r.json());
 
 console.log('\n=== Acceptance criteria ===\n');
 
@@ -240,7 +266,7 @@ console.log('\n=== Acceptance criteria ===\n');
   const target = list.leads[0];
   await fetch(`${BASE}/api/admin/leads/${target.id}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-admin' },
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
     body: JSON.stringify({ status: 'site_visit', note: 'Visited Tower B', actor: 'priya' }),
   });
   const { lead } = await admin(`/api/admin/leads/${target.id}`);
@@ -266,10 +292,84 @@ console.log('\n=== Acceptance criteria ===\n');
   const r = await fetch(`${BASE}/api/admin/leads`);
   check('Admin API requires a token', r.status === 401);
 
-  const csv = await fetch(`${BASE}/api/admin/export.csv?token=test-admin`);
+  const bad = await fetch(`${BASE}/api/admin/leads`, { headers: { Authorization: 'Bearer garbage' } });
+  check('Admin API rejects a bogus/tampered token', bad.status === 401);
+
+  const wrongPw = await fetch(`${BASE}/api/admin/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'business-one@test.local', password: 'wrong-password' }),
+  });
+  check('Login rejects the wrong password', wrongPw.status === 401);
+
+  const csv = await fetch(`${BASE}/api/admin/export.csv?token=${TOKEN}`);
   const text = await csv.text();
   check('CSV export works and includes attribution columns',
         csv.status === 200 && text.includes('campaign_name') && text.includes('gclid'));
+}
+
+// ---------------------------------------------------------------------------
+// 8. Multi-tenant isolation — a second business must never see the first
+// business's data, and vice versa, across every scoped resource.
+// ---------------------------------------------------------------------------
+{
+  const { business: businessTwo } = await upsertBusiness({
+    name: 'Test Business Two', email: 'business-two@test.local', password: 'test-password-two',
+  });
+  // scripts/create-business.js also seeds default tags for a newly provisioned
+  // business — do the same here so this suite exercises the real onboarding path.
+  await seedDefaultTags(businessTwo.id);
+  const tokenTwo = await login('business-two@test.local', 'test-password-two');
+  check('A second business gets its own id', businessTwo.id !== businessOne.id);
+
+  // Business Two starts with its own seeded default tags (seedDefaultTags
+  // runs at provisioning) but zero of Business One's leads/deals/forms/tickets.
+  const leadsTwo = await admin('/api/admin/leads', tokenTwo);
+  check('New business sees zero of the other business\'s leads', leadsTwo.leads.length === 0, String(leadsTwo.leads.length));
+
+  const dealsTwo = await admin('/api/admin/deals', tokenTwo);
+  check('New business sees zero of the other business\'s deals', dealsTwo.deals.length === 0, String(dealsTwo.deals.length));
+
+  const formsTwo = await admin('/api/admin/forms', tokenTwo);
+  check('New business sees zero of the other business\'s forms', formsTwo.forms.length === 0, String(formsTwo.forms.length));
+
+  const ticketsTwo = await admin('/api/admin/tickets', tokenTwo);
+  check('New business sees zero of the other business\'s tickets', ticketsTwo.tickets.length === 0, String(ticketsTwo.tickets.length));
+
+  const repsTwo = await admin('/api/admin/reps', tokenTwo);
+  check('New business sees zero of the other business\'s reps', repsTwo.reps.length === 0, String(repsTwo.reps.length));
+
+  const tagsOne = await admin('/api/admin/tags');
+  const tagsTwo = await admin('/api/admin/tags', tokenTwo);
+  check('Each business gets its own seeded default tags, not a shared list',
+        tagsOne.tags.length > 0 && tagsTwo.tags.length > 0 && tagsOne.tags[0].id !== tagsTwo.tags[0].id);
+
+  // Create a lead as Business Two, confirm Business One's list still doesn't see it.
+  const payloadTwo = { full_name: 'Isolation Test', phone: '9811122233' };
+  const bodyTwo = JSON.stringify(payloadTwo);
+  const createR = await fetch(`${BASE}/api/leads/website`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CRM-Signature': sign(bodyTwo, 'test-secret') },
+    body: bodyTwo,
+  });
+  const createJ = await createR.json();
+  // The website webhook is single-account (attributes to the FIRST-created
+  // business — see getDefaultBusinessId in auth.js), so this lands on
+  // Business One, not Two. Confirm that's really where it landed, and that
+  // Business Two still can't see it by guessing the id.
+  check('Website webhook lead is attributed to the default (first) business', createR.status === 201 && createJ.ok);
+  const crossRead = await admin(`/api/admin/leads/${createJ.lead_id}`, tokenTwo);
+  check('Business Two cannot read a lead belonging to Business One by id', crossRead.ok === false, JSON.stringify(crossRead));
+  const ownRead = await admin(`/api/admin/leads/${createJ.lead_id}`);
+  check('Business One can read its own lead', ownRead.ok === true && ownRead.lead.id === createJ.lead_id);
+
+  // Cross-business writes on a real resource id must also fail closed, not
+  // silently succeed against the wrong tenant.
+  const crossDelete = await fetch(`${BASE}/api/admin/leads/${createJ.lead_id}`, {
+    method: 'DELETE', headers: { Authorization: 'Bearer ' + tokenTwo },
+  }).then(r => r.json());
+  check('Business Two cannot delete a lead belonging to Business One', crossDelete.ok === false, JSON.stringify(crossDelete));
+  const stillThere = await admin(`/api/admin/leads/${createJ.lead_id}`);
+  check('  and the lead is still there afterwards', stillThere.ok === true);
 }
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===\n`);

@@ -35,16 +35,18 @@
  */
 import express from 'express';
 import { insertLead, logIngest } from '../leads.js';
+import { getDefaultBusinessId } from '../auth.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
 
 export const googleRouter = express.Router();
 
 googleRouter.post('/google/webhook', async (req, res) => {
   const body = req.body || {};
+  const businessId = await getDefaultBusinessId();
 
   const expected = process.env.GOOGLE_WEBHOOK_KEY;
   if (!expected || body.google_key !== expected) {
-    await logIngest({ source: 'google', outcome: 'rejected', reason: 'bad google_key', http_status: 401, payload: body });
+    await logIngest(businessId, { source: 'google', outcome: 'rejected', reason: 'bad google_key', http_status: 401, payload: body });
     return res.status(401).json({ ok: false });
   }
 
@@ -52,14 +54,14 @@ googleRouter.post('/google/webhook', async (req, res) => {
 
   const phone_e164 = normalizePhone(fields.phone_number);
   if (!phone_e164) {
-    await logIngest({ source: 'google', outcome: 'rejected', reason: 'invalid/absent phone', http_status: 200, payload: body });
+    await logIngest(businessId, { source: 'google', outcome: 'rejected', reason: 'invalid/absent phone', http_status: 200, payload: body });
     // 200 on purpose: Google retries non-2xx, and retrying won't fix a bad
     // phone number. We've logged it; move on.
     return res.status(200).json({ ok: true, stored: false });
   }
 
   try {
-    const { lead, outcome } = await insertLead({
+    const { lead, outcome } = await insertLead(businessId, {
       full_name: cleanText(
         fields.full_name ?? [fields.first_name, fields.last_name].filter(Boolean).join(' '), 200,
       ),
@@ -86,11 +88,11 @@ googleRouter.post('/google/webhook', async (req, res) => {
       submitted_at: new Date().toISOString(),
     });
 
-    await logIngest({ source: 'google', outcome, lead_id: lead.id, http_status: 200, payload: body });
+    await logIngest(businessId, { source: 'google', outcome, lead_id: lead.id, http_status: 200, payload: body });
     return res.status(200).json({ ok: true, lead_id: lead.id });
   } catch (err) {
     console.error('[google] insert failed:', err);
-    await logIngest({ source: 'google', outcome: 'error', reason: err.message, http_status: 500, payload: body });
+    await logIngest(businessId, { source: 'google', outcome: 'error', reason: err.message, http_status: 500, payload: body });
     // 5xx here IS worth a retry — the lead was valid, our DB blinked.
     return res.status(500).json({ ok: false });
   }

@@ -1,0 +1,136 @@
+/**
+ * Multi-tenant auth — one login per business (client), not per staff member.
+ * Everyone at a given client shares that one login, same as the old shared
+ * ADMIN_TOKEN did for Core Value Realty alone; the difference now is every
+ * client gets their OWN login and can only ever see their own data.
+ *
+ * Two independent primitives:
+ *   - Password hashing (scrypt, Node's built-in — no bcrypt/argon2 native
+ *     dependency to worry about breaking on Vercel's build image).
+ *   - Session tokens: stateless, HMAC-signed. No sessions table, no cleanup
+ *     job for expired rows — verifying a token is just re-computing the
+ *     signature and checking the expiry embedded in the payload. This is
+ *     deliberately NOT a JWT library: the format is `payload.signature`
+ *     (both base64url), which is the same shape minus the parts of the JWT
+ *     spec (alg negotiation, JOSE headers) this app has no use for and that
+ *     are also where most JWT footguns live (alg:none, alg confusion).
+ *
+ * Provisioning a new client is NOT an HTTP endpoint — there is no
+ * "create business" API route, on purpose. It's a local CLI script
+ * (scripts/create-business.js) run against the live DATABASE_URL by
+ * whoever operates this platform. That avoids needing a second, higher-
+ * privileged "super-admin" login system just to gate a feature only one
+ * person ever uses.
+ */
+import crypto from 'node:crypto';
+import { query, one } from './db.js';
+
+const SCRYPT_KEYLEN = 64;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function getSessionSecret() {
+  const secret = process.env.SESSION_SECRET;
+  if (secret && secret.trim()) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[auth] SESSION_SECRET is not set. Refusing to start in production.');
+    process.exit(1);
+  }
+  return 'local-dev-session-secret-not-for-production';
+}
+
+// --- passwords ---------------------------------------------------------
+export function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, SCRYPT_KEYLEN).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  const [salt, hashHex] = stored.split(':');
+  const expected = Buffer.from(hashHex, 'hex');
+  const actual = crypto.scryptSync(password, salt, SCRYPT_KEYLEN);
+  // Lengths must match before timingSafeEqual will even compare — a bad
+  // stored hash (wrong length) would otherwise throw instead of just
+  // failing the login.
+  if (expected.length !== actual.length) return false;
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+// --- session tokens ------------------------------------------------------
+function sign(payloadB64) {
+  return crypto.createHmac('sha256', getSessionSecret()).update(payloadB64).digest('base64url');
+}
+
+export function issueSessionToken(business) {
+  const payload = { business_id: business.id, exp: Date.now() + SESSION_TTL_MS };
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  return `${payloadB64}.${sign(payloadB64)}`;
+}
+
+/** Returns { business_id } if the token is validly signed and unexpired, else null. */
+export function verifySessionToken(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  const [payloadB64, sig] = token.split('.');
+  const expected = sign(payloadB64);
+  const a = Buffer.from(sig || '');
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (!payload.business_id || !payload.exp || Date.now() > payload.exp) return null;
+  return { business_id: payload.business_id };
+}
+
+// --- business accounts -----------------------------------------------------
+export async function findBusinessByEmail(email) {
+  return one(`SELECT * FROM businesses WHERE LOWER(email) = LOWER($1)`, [email]);
+}
+
+export async function getBusiness(id) {
+  return one(`SELECT * FROM businesses WHERE id = $1`, [id]);
+}
+
+/** Returns the business row (password excluded) on success, null on bad credentials. */
+export async function authenticateBusiness(email, password) {
+  const business = await findBusinessByEmail(email);
+  if (!business || !business.is_active || !business.password_hash) return null;
+  if (!verifyPassword(password, business.password_hash)) return null;
+  const { password_hash, ...safe } = business;
+  return safe;
+}
+
+/**
+ * The Meta/Google ad webhooks and the legacy /api/leads/website endpoint
+ * aren't per-client yet (see module comment in scripts/create-business.js) —
+ * for this pass they all attribute incoming leads to whichever business was
+ * created first, which in practice is Core Value Realty's own account.
+ * Revisit this the day a second client actually needs their own ad account
+ * wired up.
+ */
+export async function getDefaultBusinessId() {
+  const row = await one(`SELECT id FROM businesses ORDER BY created_at ASC LIMIT 1`);
+  return row ? row.id : null;
+}
+
+/** Used by scripts/create-business.js — creates a new client, or updates an existing one's password if the email already exists. */
+export async function upsertBusiness({ name, email, password }) {
+  const existing = await findBusinessByEmail(email);
+  const password_hash = hashPassword(password);
+  if (existing) {
+    const res = await query(
+      `UPDATE businesses SET name = $1, password_hash = $2 WHERE id = $3 RETURNING id, name, email, created_at`,
+      [name || existing.name, password_hash, existing.id],
+    );
+    return { business: res.rows[0], created: false };
+  }
+  const res = await query(
+    `INSERT INTO businesses (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, created_at`,
+    [name, email, password_hash],
+  );
+  return { business: res.rows[0], created: true };
+}

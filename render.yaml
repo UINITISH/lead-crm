@@ -46,6 +46,10 @@ services:
       # --- Google Ads Lead Form ------------------------------------------
       - key: GOOGLE_WEBHOOK_KEY
         sync: false
-      # --- Admin UI --------------------------------------------------------
-      - key: ADMIN_TOKEN
+      # --- Admin auth --------------------------------------------------------
+      - key: SESSION_SECRET
+        sync: false
+      - key: DEFAULT_BUSINESS_NAME
+        sync: false
+      - key: DEFAULT_BUSINESS_EMAIL
         sync: false

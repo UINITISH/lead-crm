@@ -172,9 +172,10 @@ conversation instead of a lost account.
 
 ## Phase 2 — do these in this order
 
-1. **Real user accounts.** `ADMIN_TOKEN` is a shared password; it cannot tell
-   you who changed a lead. Replace it before the sales team gets access, or the
-   audit trail is decorative.
+1. ~~**Real user accounts.**~~ Done — one login (email + password) per client
+   business, isolating each business's data from every other's. Still not
+   per-staff-member accounts within a business (everyone at a client shares
+   that one login), which is an intentional simplification, not an oversight.
 2. **Assignment engine** — round-robin or by project.
 3. **WhatsApp Business API.** Note: click-to-WhatsApp ads pass a `ctwa_clid`
    parameter that ties the conversation back to the ad. Capture it or WhatsApp

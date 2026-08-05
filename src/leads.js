@@ -1,6 +1,13 @@
 /**
  * Lead repository. All writes go through here so dedupe, idempotency and the
  * audit trail can't be bypassed by a new route someone adds in Phase 2.
+ *
+ * Multi-tenant: every exported function takes `businessId` as its FIRST
+ * parameter, on purpose — burying a tenant-scope key inside an options
+ * object makes it easy to forget on some new call site six months from now;
+ * a mandatory leading positional argument doesn't. Every query in this file
+ * filters or inserts on it. There is no "give me all leads" query left
+ * anywhere — that would be a cross-tenant data leak by construction.
  */
 import { query, one } from './db.js';
 import { getSetting } from './settings.js';
@@ -9,13 +16,14 @@ import { getSetting } from './settings.js';
  * Window in which a repeat submission from the same number is a duplicate.
  * Editable from Settings without a restart; falls back to .env, then 30.
  */
-async function dedupeWindowDays() {
-  const v = await getSetting('dedupe_window_days');
+async function dedupeWindowDays(businessId) {
+  const v = await getSetting(businessId, 'dedupe_window_days');
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : 30;
 }
 
 const COLUMNS = [
+  'business_id',
   'full_name', 'phone_raw', 'phone_e164', 'email', 'budget_range', 'budget_min', 'budget_max', 'timeline',
   'project_id', 'developer_name', 'project_name', 'source', 'platform_lead_id',
   'campaign_id', 'campaign_name', 'adset_id', 'adset_name', 'ad_id', 'ad_name',
@@ -41,34 +49,37 @@ const JSON_COLUMNS = new Set(['first_touch', 'raw_payload']);
  * 'replayed' matters because Meta retries its webhook on any non-200 and will
  * happily send you the same leadgen_id several times.
  */
-export async function insertLead(input) {
-  // 1. Idempotency on the platform's own ID.
+export async function insertLead(businessId, input) {
+  // 1. Idempotency on the platform's own ID — scoped per business, so two
+  // different clients each running their own Meta account can't collide.
   if (input.platform_lead_id) {
     const existing = await one(
-      `SELECT * FROM leads WHERE source = $1 AND platform_lead_id = $2`,
-      [input.source, input.platform_lead_id],
+      `SELECT * FROM leads WHERE business_id = $1 AND source = $2 AND platform_lead_id = $3`,
+      [businessId, input.source, input.platform_lead_id],
     );
     if (existing) return { lead: existing, outcome: 'replayed' };
   }
 
-  // 2. Human-level dedupe on the normalised phone number.
+  // 2. Human-level dedupe on the normalised phone number, within this business only.
   let duplicateOf = null;
   if (input.phone_e164) {
-    const windowDays = await dedupeWindowDays();
+    const windowDays = await dedupeWindowDays(businessId);
     const prior = await one(
       `SELECT id FROM leads
-        WHERE phone_e164 = $1
+        WHERE business_id = $1
+          AND phone_e164 = $2
           AND is_duplicate = FALSE
-          AND created_at > now() - ($2 || ' days')::interval
+          AND created_at > now() - ($3 || ' days')::interval
         ORDER BY created_at ASC
         LIMIT 1`,
-      [input.phone_e164, String(windowDays)],
+      [businessId, input.phone_e164, String(windowDays)],
     );
     if (prior) duplicateOf = prior.id;
   }
 
   const row = {
     ...input,
+    business_id: businessId,
     is_duplicate: Boolean(duplicateOf),
     duplicate_of: duplicateOf,
   };
@@ -89,7 +100,7 @@ export async function insertLead(input) {
   const capturedNote = lead.entry_method === 'manual'
     ? `Manually entered · source: ${lead.source}`
     : `Captured from ${lead.source}`;
-  await addEvent(lead.id, {
+  await addEvent(businessId, lead.id, {
     event_type: 'created',
     to_status: 'new',
     note: duplicateOf ? `Duplicate of ${duplicateOf}` : capturedNote,
@@ -99,12 +110,22 @@ export async function insertLead(input) {
   return { lead, outcome: duplicateOf ? 'duplicate' : 'accepted' };
 }
 
-export async function addEvent(leadId, { event_type, from_status = null, to_status = null, note = null, actor = 'system' }) {
+/**
+ * lead_events has no business_id of its own — it's reached through lead_id,
+ * and every write here first confirms that lead actually belongs to
+ * `businessId` before touching anything, so a guessed/leaked UUID from
+ * another business's lead can never get an event attached (or read back —
+ * see getLead()).
+ */
+export async function addEvent(businessId, leadId, { event_type, from_status = null, to_status = null, note = null, actor = 'system' }) {
+  const owns = await one(`SELECT id FROM leads WHERE id = $1 AND business_id = $2`, [leadId, businessId]);
+  if (!owns) return false;
   await query(
     `INSERT INTO lead_events (lead_id, event_type, from_status, to_status, note, actor)
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [leadId, event_type, from_status, to_status, note, actor],
   );
+  return true;
 }
 
 /**
@@ -128,19 +149,19 @@ const EDITABLE_LEAD_FIELDS = [
 /**
  * Partial update. Returns { before, after } so the caller can write a
  * human-readable "what changed" note into the lead's activity thread —
- * returns null if the lead doesn't exist.
+ * returns null if the lead doesn't exist OR doesn't belong to this business.
  */
-export async function updateLead(leadId, fields = {}) {
-  const current = await one(`SELECT * FROM leads WHERE id = $1`, [leadId]);
+export async function updateLead(businessId, leadId, fields = {}) {
+  const current = await one(`SELECT * FROM leads WHERE id = $1 AND business_id = $2`, [leadId, businessId]);
   if (!current) return null;
 
   const keys = EDITABLE_LEAD_FIELDS.filter((k) => fields[k] !== undefined);
   if (!keys.length) return { before: current, after: current };
 
-  const sets = keys.map((k, i) => `${k} = $${i + 2}`);
-  const params = [leadId, ...keys.map((k) => fields[k])];
+  const sets = keys.map((k, i) => `${k} = $${i + 3}`);
+  const params = [leadId, businessId, ...keys.map((k) => fields[k])];
   const res = await query(
-    `UPDATE leads SET ${sets.join(', ')}, updated_at = now() WHERE id = $1 RETURNING *`,
+    `UPDATE leads SET ${sets.join(', ')}, updated_at = now() WHERE id = $1 AND business_id = $2 RETURNING *`,
     params,
   );
   return { before: current, after: res.rows[0] };
@@ -148,23 +169,24 @@ export async function updateLead(leadId, fields = {}) {
 
 /**
  * Hard delete. lead_events/deals/follow_ups all cascade (ON DELETE CASCADE),
- * so nothing is left orphaned. Returns false if the lead was already gone.
+ * so nothing is left orphaned. Returns false if the lead was already gone,
+ * or belongs to a different business.
  */
-export async function deleteLead(leadId) {
-  const res = await query(`DELETE FROM leads WHERE id = $1 RETURNING id`, [leadId]);
+export async function deleteLead(businessId, leadId) {
+  const res = await query(`DELETE FROM leads WHERE id = $1 AND business_id = $2 RETURNING id`, [leadId, businessId]);
   return res.rows.length > 0;
 }
 
-export async function updateStatus(leadId, newStatus, { actor = 'user', note = null } = {}) {
-  const current = await one(`SELECT status FROM leads WHERE id = $1`, [leadId]);
+export async function updateStatus(businessId, leadId, newStatus, { actor = 'user', note = null } = {}) {
+  const current = await one(`SELECT status FROM leads WHERE id = $1 AND business_id = $2`, [leadId, businessId]);
   if (!current) return null;
   if (current.status === newStatus && !note) return current;
 
   const res = await query(
-    `UPDATE leads SET status = $2 WHERE id = $1 RETURNING *`,
-    [leadId, newStatus],
+    `UPDATE leads SET status = $3 WHERE id = $1 AND business_id = $2 RETURNING *`,
+    [leadId, businessId, newStatus],
   );
-  await addEvent(leadId, {
+  await addEvent(businessId, leadId, {
     event_type: 'status_change',
     from_status: current.status,
     to_status: newStatus,
@@ -174,9 +196,9 @@ export async function updateStatus(leadId, newStatus, { actor = 'user', note = n
   return res.rows[0];
 }
 
-export async function listLeads(filters = {}) {
-  const where = [];
-  const params = [];
+export async function listLeads(businessId, filters = {}) {
+  const params = [businessId];
+  const where = ['l.business_id = $1'];
   const add = (clause, value) => { params.push(value); where.push(clause.replace('?', `$${params.length}`)); };
 
   if (filters.source)        add('source = ?', filters.source);
@@ -196,9 +218,9 @@ export async function listLeads(filters = {}) {
   if (!filters.include_test)       where.push('is_test = FALSE');
 
   const sql = `SELECT l.*,
-      (1 + (SELECT COUNT(*) FROM leads d WHERE d.duplicate_of = l.id))::int AS occurrence_count
+      (1 + (SELECT COUNT(*) FROM leads d WHERE d.duplicate_of = l.id AND d.business_id = l.business_id))::int AS occurrence_count
     FROM leads l
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    WHERE ${where.join(' AND ')}
     ORDER BY created_at DESC
     LIMIT ${Math.min(Number(filters.limit) || 200, 1000)}
     OFFSET ${Number(filters.offset) || 0}`;
@@ -207,13 +229,13 @@ export async function listLeads(filters = {}) {
   return res.rows;
 }
 
-export async function getLead(id) {
-  const lead = await one(`SELECT * FROM leads WHERE id = $1`, [id]);
+export async function getLead(businessId, id) {
+  const lead = await one(`SELECT * FROM leads WHERE id = $1 AND business_id = $2`, [id, businessId]);
   if (!lead) return null;
   const events = await query(
     `SELECT * FROM lead_events WHERE lead_id = $1 ORDER BY created_at ASC`, [id],
   );
-  const duplicates = await listDuplicatesOf(id);
+  const duplicates = await listDuplicatesOf(businessId, id);
   return { ...lead, events: events.rows, duplicates, occurrence_count: 1 + duplicates.length };
 }
 
@@ -223,11 +245,11 @@ export async function getLead(id) {
  * drawer so a rep can see someone enquired more than once without that
  * inflating the headline lead count.
  */
-export async function listDuplicatesOf(leadId) {
+export async function listDuplicatesOf(businessId, leadId) {
   const res = await query(
     `SELECT id, full_name, phone_raw, phone_e164, source, form_name, campaign_name, created_at
-       FROM leads WHERE duplicate_of = $1 ORDER BY created_at ASC`,
-    [leadId],
+       FROM leads WHERE duplicate_of = $1 AND business_id = $2 ORDER BY created_at ASC`,
+    [leadId, businessId],
   );
   return res.rows;
 }
@@ -237,12 +259,11 @@ export async function listDuplicatesOf(leadId) {
  * Duplicates and test leads are excluded by default — report the honest figure,
  * and keep the gross figure available so you can explain the gap.
  */
-export async function sourceReport({ from = null, to = null } = {}) {
-  const params = [];
-  const where = [];
+export async function sourceReport(businessId, { from = null, to = null } = {}) {
+  const params = [businessId];
+  const where = ['business_id = $1', 'is_test = FALSE'];
   if (from) { params.push(from); where.push(`created_at >= $${params.length}`); }
   if (to)   { params.push(to);   where.push(`created_at <= $${params.length}`); }
-  where.push('is_test = FALSE');
   const clause = `WHERE ${where.join(' AND ')}`;
 
   const res = await query(
@@ -264,36 +285,39 @@ export async function sourceReport({ from = null, to = null } = {}) {
 }
 
 /** Recent lifecycle events across every lead, for the dashboard activity feed. */
-export async function listRecentActivity({ limit = 15 } = {}) {
+export async function listRecentActivity(businessId, { limit = 15 } = {}) {
   const res = await query(
     `SELECT e.id, e.event_type, e.from_status, e.to_status, e.note, e.actor, e.created_at,
             l.id AS lead_id, l.full_name, l.phone_e164
        FROM lead_events e
        JOIN leads l ON l.id = e.lead_id
+      WHERE l.business_id = $1
       ORDER BY e.created_at DESC
-      LIMIT $1`,
-    [Math.min(Number(limit) || 15, 100)],
+      LIMIT $2`,
+    [businessId, Math.min(Number(limit) || 15, 100)],
   );
   return res.rows;
 }
 
 /**
- * Who's actually working leads. Approximate until Phase 2 adds real user
- * accounts (Phase 1 shares one admin token) — `actor` is only as accurate as
+ * Who's actually working leads. Approximate until real per-staff accounts
+ * exist (today, one login per business) — `actor` is only as accurate as
  * whatever name someone typed into "Acting as" for their session, but that's
  * still real attribution, not a guess.
  */
-export async function leaderboard() {
+export async function leaderboard(businessId) {
   const res = await query(
     `SELECT actor,
             COUNT(DISTINCT lead_id) FILTER (WHERE event_type = 'status_change')                          AS leads_worked,
             COUNT(*) FILTER (WHERE event_type = 'status_change' AND to_status = 'closed')                 AS leads_closed,
             COUNT(DISTINCT lead_id) FILTER (WHERE event_type = 'created')                                  AS leads_added
-       FROM lead_events
-      WHERE actor IS NOT NULL AND actor <> 'system'
+       FROM lead_events e
+       JOIN leads l ON l.id = e.lead_id
+      WHERE l.business_id = $1 AND e.actor IS NOT NULL AND e.actor <> 'system'
       GROUP BY actor
       ORDER BY leads_closed DESC, leads_worked DESC
       LIMIT 10`,
+    [businessId],
   );
   return res.rows;
 }
@@ -306,8 +330,8 @@ const BUDGET_MIDPOINT = `CASE WHEN budget_min IS NOT NULL OR budget_max IS NOT N
  * month-over-month trend, pipeline stage breakdown (count + ₹ value), and an
  * 8-week value trend. Values are in ₹ lakhs (see budget_min/budget_max).
  */
-export async function dashboardStats() {
-  const base = `is_duplicate = FALSE AND is_test = FALSE`;
+export async function dashboardStats(businessId) {
+  const base = `business_id = $1 AND is_duplicate = FALSE AND is_test = FALSE`;
 
   const totals = await one(
     `SELECT
@@ -326,7 +350,9 @@ export async function dashboardStats() {
         COALESCE(SUM(${BUDGET_MIDPOINT}) FILTER (WHERE ${base} AND status NOT IN ('closed','dropped')
                                        AND created_at >= date_trunc('month', now()) - interval '1 month'
                                        AND created_at <  date_trunc('month', now())), 0)     AS pipeline_value_last_month
-     FROM leads`,
+     FROM leads
+     WHERE business_id = $1`,
+    [businessId],
   );
 
   const stageRows = await query(
@@ -336,6 +362,7 @@ export async function dashboardStats() {
        FROM leads
       WHERE ${base}
       GROUP BY status`,
+    [businessId],
   );
   const stages = ['new', 'contacted', 'site_visit', 'negotiation', 'closed', 'dropped'].map((s) => {
     const row = stageRows.rows.find((r) => r.status === s);
@@ -350,6 +377,7 @@ export async function dashboardStats() {
       WHERE ${base} AND created_at >= now() - interval '8 weeks'
       GROUP BY week
       ORDER BY week`,
+    [businessId],
   );
 
   const pct = (now, prev) => {
@@ -371,12 +399,12 @@ export async function dashboardStats() {
   };
 }
 
-export async function logIngest({ source, outcome, reason = null, lead_id = null, http_status = null, payload = null }) {
+export async function logIngest(businessId, { source, outcome, reason = null, lead_id = null, http_status = null, payload = null }) {
   try {
     await query(
-      `INSERT INTO ingest_log (source, outcome, reason, lead_id, http_status, payload)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [source, outcome, reason, lead_id, http_status, JSON.stringify(payload ?? {})],
+      `INSERT INTO ingest_log (business_id, source, outcome, reason, lead_id, http_status, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [businessId, source, outcome, reason, lead_id, http_status, JSON.stringify(payload ?? {})],
     );
   } catch (e) {
     // Logging must never break ingestion.

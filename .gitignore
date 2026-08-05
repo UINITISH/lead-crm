@@ -11,3 +11,6 @@ public_build_check/
 .pgdata.sandbox-fresh-discard/
 *.log
 .DS_Store
+
+# Real lead/business data exported for migration — never belongs in git.
+export.json

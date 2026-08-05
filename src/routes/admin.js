@@ -1,9 +1,12 @@
 /**
- * Admin API behind a shared bearer token.
+ * Admin API — one login per client business, not a shared token anymore.
  *
- * Phase 1 only. Before Phase 2 ships to Core Value Realty's sales team, replace this
- * with per-user accounts — a shared token means you cannot tell who changed a
- * lead's status, which makes the audit trail worthless the moment it matters.
+ * POST /auth/login is the only unauthenticated route on this router; every
+ * other route requires a valid session token (see src/auth.js) and runs
+ * scoped to req.business_id, which the session middleware below sets from
+ * that token. There is no cross-business admin route — provisioning a new
+ * business is a local CLI script (scripts/create-business.js), not an API
+ * endpoint, so there's no "super-admin" web surface to secure separately.
  */
 import express from 'express';
 import {
@@ -36,6 +39,7 @@ import {
   createTicket, listTickets, getTicket, updateTicket, deleteTicket, ticketStats,
 } from '../tickets.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
+import { authenticateBusiness, issueSessionToken, verifySessionToken } from '../auth.js';
 
 const toNum = (v) => {
   if (v === undefined || v === null || v === '') return null;
@@ -45,46 +49,33 @@ const toNum = (v) => {
 
 export const adminRouter = express.Router();
 
-// Resolve the token once, at boot, so the behaviour is obvious in the logs
-// rather than surfacing as a mystery 401 in the browser.
-const IS_PROD = process.env.NODE_ENV === 'production';
-let ADMIN_TOKEN = process.env.ADMIN_TOKEN;
-
-if (!ADMIN_TOKEN) {
-  if (IS_PROD) {
-    // Refuse to run. An admin API with no credential is worse than a crash.
-    console.error('[admin] ADMIN_TOKEN is not set. Refusing to start in production.');
-    process.exit(1);
-  }
-  ADMIN_TOKEN = 'local-preview';
-  console.warn(
-    '[admin] No ADMIN_TOKEN in .env — using the development default "local-preview".\n' +
-    '[admin] Set a real one before this is reachable by anyone else.',
-  );
-}
-
 /**
- * Local convenience: when we're running on the development default token,
- * hand it to the UI so nobody has to type it. Deliberately gated twice —
- * NOT production, AND the token is still the well-known default. Set a real
- * ADMIN_TOKEN and this endpoint stops existing.
+ * POST /auth/login — the one route on this router that runs before the
+ * session-check middleware below, so it's the only one reachable without
+ * already being logged in.
  */
-export const USING_DEV_DEFAULT = !IS_PROD && ADMIN_TOKEN === 'local-preview';
-
-adminRouter.get('/dev-token', (_req, res) => {
-  if (!USING_DEV_DEFAULT) return res.status(404).json({ ok: false });
-  res.json({ ok: true, token: ADMIN_TOKEN });
+adminRouter.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!cleanText(email) || !password) {
+    return res.status(400).json({ ok: false, error: 'Email and password are required' });
+  }
+  const business = await authenticateBusiness(email, password);
+  if (!business) return res.status(401).json({ ok: false, error: 'Incorrect email or password' });
+  const token = issueSessionToken(business);
+  res.json({ ok: true, token, business: { id: business.id, name: business.name, email: business.email } });
 });
 
+/** Every route below this line requires a valid session and runs scoped to req.business_id. */
 adminRouter.use((req, res, next) => {
-  const given = (req.get('Authorization') || '').replace(/^Bearer\s+/i, '')
-    || req.query.token;
-  if (given !== ADMIN_TOKEN) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  const given = (req.get('Authorization') || '').replace(/^Bearer\s+/i, '') || req.query.token;
+  const session = verifySessionToken(given);
+  if (!session) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  req.business_id = session.business_id;
   next();
 });
 
 adminRouter.get('/leads', async (req, res) => {
-  const rows = await listLeads({
+  const rows = await listLeads(req.business_id, {
     source: req.query.source,
     status: req.query.status,
     tag: req.query.tag,
@@ -128,11 +119,14 @@ adminRouter.post('/leads/manual', async (req, res) => {
 
   // Developer/project: accept an existing id, or a typed name to create on
   // the spot. Neither is required — a lead can be logged before the project
-  // is pinned down and edited later. A comma means multiple developers
-  // ("Prestige Group, Sumadhura Group") — that's stored as free text on the
-  // lead only, same convention used everywhere else, and deliberately never
-  // sent to findOrCreateDeveloper: doing so would create a bogus directory
-  // entry literally named after the whole combined string.
+  // is pinned down and edited later. developers/projects is a SHARED catalog
+  // across every business (public builder info), so no business_id check
+  // here — but everything else below (the lead itself) is business-scoped.
+  // A comma means multiple developers ("Prestige Group, Sumadhura Group") —
+  // that's stored as free text on the lead only, same convention used
+  // everywhere else, and deliberately never sent to findOrCreateDeveloper:
+  // doing so would create a bogus directory entry literally named after the
+  // whole combined string.
   let developer = null;
   const isMultiDeveloper = cleanText(body.developer_name)?.includes(',');
   if (body.developer_id) {
@@ -152,7 +146,7 @@ adminRouter.post('/leads/manual', async (req, res) => {
   }
 
   try {
-    const { lead, outcome } = await insertLead({
+    const { lead, outcome } = await insertLead(req.business_id, {
       full_name:    cleanText(body.full_name ?? body.name, 200),
       phone_raw:    cleanText(body.phone, 50),
       phone_e164,
@@ -173,14 +167,14 @@ adminRouter.post('/leads/manual', async (req, res) => {
     });
 
     if (cleanText(body.notes)) {
-      await addEvent(lead.id, {
+      await addEvent(req.business_id, lead.id, {
         event_type: 'note',
         note: cleanText(body.notes, 2000),
         actor: cleanText(body.actor ?? body.created_by, 100) || 'admin',
       });
     }
 
-    await logIngest({ source: body.source, outcome, lead_id: lead.id, http_status: 201, payload: { ...body, manual: true } });
+    await logIngest(req.business_id, { source: body.source, outcome, lead_id: lead.id, http_status: 201, payload: { ...body, manual: true } });
     return res.status(201).json({ ok: true, lead, duplicate: outcome === 'duplicate' });
   } catch (err) {
     console.error('[admin] manual lead insert failed:', err);
@@ -188,6 +182,8 @@ adminRouter.post('/leads/manual', async (req, res) => {
   }
 });
 
+// developers/projects are a SHARED catalog across every business — no
+// business_id scoping here, on purpose (see db/schema.sql's businesses note).
 adminRouter.get('/developers', async (_req, res) => {
   res.json({ ok: true, developers: await listDevelopers() });
 });
@@ -213,46 +209,46 @@ adminRouter.post('/projects', async (req, res) => {
 
 /** Dashboard activity feed: recent lifecycle events across every lead. */
 adminRouter.get('/activity', async (req, res) => {
-  res.json({ ok: true, activity: await listRecentActivity({ limit: req.query.limit }) });
+  res.json({ ok: true, activity: await listRecentActivity(req.business_id, { limit: req.query.limit }) });
 });
 
 /**
- * Who's working leads, ranked. Approximate until real user accounts exist —
- * it's grouped by whatever name was set as "Acting as" for a session, not a
- * verified identity.
+ * Who's working leads, ranked. Approximate until real per-staff accounts
+ * exist — it's grouped by whatever name was set as "Acting as" for a
+ * session, not a verified identity.
  */
-adminRouter.get('/leaderboard', async (_req, res) => {
-  res.json({ ok: true, leaderboard: await leaderboard() });
+adminRouter.get('/leaderboard', async (req, res) => {
+  res.json({ ok: true, leaderboard: await leaderboard(req.business_id) });
 });
 
 /** Headline stats, pipeline stage breakdown, and an 8-week value trend, in one call. */
-adminRouter.get('/dashboard-stats', async (_req, res) => {
-  res.json({ ok: true, stats: await dashboardStats() });
+adminRouter.get('/dashboard-stats', async (req, res) => {
+  res.json({ ok: true, stats: await dashboardStats(req.business_id) });
 });
 
 /** Upcoming follow-up reminders across all leads. */
 adminRouter.get('/followups', async (req, res) => {
-  res.json({ ok: true, followups: await listUpcoming({ limit: req.query.limit, includeDone: req.query.include_done === '1' }) });
+  res.json({ ok: true, followups: await listUpcoming(req.business_id, { limit: req.query.limit, includeDone: req.query.include_done === '1' }) });
 });
 
 adminRouter.get('/leads/:id/followups', async (req, res) => {
-  res.json({ ok: true, followups: await listForLead(req.params.id) });
+  res.json({ ok: true, followups: await listForLead(req.business_id, req.params.id) });
 });
 
 adminRouter.post('/leads/:id/followups', async (req, res) => {
   const { due_at, note, assigned_to, actor } = req.body || {};
   if (!due_at) return res.status(400).json({ ok: false, error: 'due_at is required', field: 'due_at' });
-  const lead = await getLead(req.params.id);
+  const lead = await getLead(req.business_id, req.params.id);
   if (!lead) return res.status(404).json({ ok: false, error: 'Lead not found' });
 
-  const followup = await createFollowUp({
+  const followup = await createFollowUp(req.business_id, {
     lead_id: req.params.id,
     due_at,
     note: cleanText(note, 500),
     assigned_to: cleanText(assigned_to, 100),
     created_by: cleanText(actor, 100) || 'admin',
   });
-  await addEvent(req.params.id, {
+  await addEvent(req.business_id, req.params.id, {
     event_type: 'note',
     note: `Follow-up scheduled for ${new Date(due_at).toLocaleString('en-IN')}${note ? ': ' + note : ''}`,
     actor: cleanText(actor, 100) || 'admin',
@@ -264,9 +260,9 @@ adminRouter.patch('/followups/:id', async (req, res) => {
   const { done, due_at, note } = req.body || {};
   let followup;
   if (done !== undefined) {
-    followup = await markDone(req.params.id, { done: Boolean(done) });
+    followup = await markDone(req.business_id, req.params.id, { done: Boolean(done) });
   } else {
-    followup = await updateFollowUp(req.params.id, { due_at, note });
+    followup = await updateFollowUp(req.business_id, req.params.id, { due_at, note });
   }
   if (!followup) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, followup });
@@ -280,25 +276,25 @@ adminRouter.patch('/followups/:id', async (req, res) => {
 const DEAL_ELIGIBLE_STATUSES = ['negotiation', 'closed'];
 
 adminRouter.get('/deals', async (req, res) => {
-  res.json({ ok: true, deals: await listDeals({ stage: req.query.stage, limit: req.query.limit }) });
+  res.json({ ok: true, deals: await listDeals(req.business_id, { stage: req.query.stage, limit: req.query.limit }) });
 });
 
-adminRouter.get('/deal-stats', async (_req, res) => {
-  res.json({ ok: true, stats: await dealStats() });
+adminRouter.get('/deal-stats', async (req, res) => {
+  res.json({ ok: true, stats: await dealStats(req.business_id) });
 });
 
 adminRouter.get('/deals/:id', async (req, res) => {
-  const deal = await getDeal(req.params.id);
+  const deal = await getDeal(req.business_id, req.params.id);
   if (!deal) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, deal });
 });
 
 adminRouter.get('/leads/:id/deals', async (req, res) => {
-  res.json({ ok: true, deals: await listDealsForLead(req.params.id) });
+  res.json({ ok: true, deals: await listDealsForLead(req.business_id, req.params.id) });
 });
 
 adminRouter.post('/leads/:id/deals', async (req, res) => {
-  const lead = await getLead(req.params.id);
+  const lead = await getLead(req.business_id, req.params.id);
   if (!lead) return res.status(404).json({ ok: false, error: 'Lead not found' });
   if (!DEAL_ELIGIBLE_STATUSES.includes(lead.status)) {
     return res.status(400).json({
@@ -308,7 +304,7 @@ adminRouter.post('/leads/:id/deals', async (req, res) => {
   }
 
   const { unit_number, agreed_price, expected_closing_date, notes, actor } = req.body || {};
-  const deal = await createDeal({
+  const deal = await createDeal(req.business_id, {
     lead_id: req.params.id,
     unit_number: cleanText(unit_number, 100),
     agreed_price: toNum(agreed_price),
@@ -322,7 +318,7 @@ adminRouter.post('/leads/:id/deals', async (req, res) => {
 adminRouter.patch('/deals/:id', async (req, res) => {
   const { stage, unit_number, agreed_price, expected_closing_date, notes, actor } = req.body || {};
   try {
-    const deal = await updateDeal(req.params.id, {
+    const deal = await updateDeal(req.business_id, req.params.id, {
       stage,
       unit_number: unit_number !== undefined ? cleanText(unit_number, 100) : undefined,
       agreed_price: agreed_price !== undefined ? toNum(agreed_price) : undefined,
@@ -344,20 +340,21 @@ adminRouter.patch('/deals/:id', async (req, res) => {
  * each sub-resource also has its own add/update/delete routes.
  */
 adminRouter.get('/deals/:id/booking', async (req, res) => {
-  const deal = await getDeal(req.params.id);
-  if (!deal) return res.status(404).json({ ok: false, error: 'Not found' });
-  res.json({ ok: true, ...(await getBooking(req.params.id)) });
+  const booking = await getBooking(req.business_id, req.params.id);
+  if (!booking) return res.status(404).json({ ok: false, error: 'Not found' });
+  res.json({ ok: true, ...booking });
 });
 
 adminRouter.post('/deals/:id/applicants', async (req, res) => {
   const { full_name, relation, phone, email, pan, aadhaar, address, notes } = req.body || {};
   try {
-    const applicant = await addApplicant(req.params.id, {
+    const applicant = await addApplicant(req.business_id, req.params.id, {
       full_name: cleanText(full_name, 200), relation,
       phone: cleanText(phone, 50), email: normalizeEmail(email),
       pan: cleanText(pan, 20), aadhaar: cleanText(aadhaar, 20),
       address: cleanText(address, 500), notes: cleanText(notes, 1000),
     });
+    if (!applicant) return res.status(404).json({ ok: false, error: 'Not found' });
     res.status(201).json({ ok: true, applicant });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
@@ -365,7 +362,7 @@ adminRouter.post('/deals/:id/applicants', async (req, res) => {
 adminRouter.patch('/deal-applicants/:id', async (req, res) => {
   const { full_name, relation, phone, email, pan, aadhaar, address, notes } = req.body || {};
   try {
-    const applicant = await updateApplicant(req.params.id, {
+    const applicant = await updateApplicant(req.business_id, req.params.id, {
       full_name: full_name !== undefined ? cleanText(full_name, 200) : undefined,
       relation,
       phone: phone !== undefined ? cleanText(phone, 50) : undefined,
@@ -381,7 +378,7 @@ adminRouter.patch('/deal-applicants/:id', async (req, res) => {
 });
 
 adminRouter.delete('/deal-applicants/:id', async (req, res) => {
-  const ok = await deleteApplicant(req.params.id);
+  const ok = await deleteApplicant(req.business_id, req.params.id);
   if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true });
 });
@@ -389,14 +386,15 @@ adminRouter.delete('/deal-applicants/:id', async (req, res) => {
 adminRouter.post('/deals/:id/cost-items', async (req, res) => {
   const { label, amount } = req.body || {};
   try {
-    const item = await addCostItem(req.params.id, { label: cleanText(label, 200), amount: toNum(amount) });
+    const item = await addCostItem(req.business_id, req.params.id, { label: cleanText(label, 200), amount: toNum(amount) });
+    if (!item) return res.status(404).json({ ok: false, error: 'Not found' });
     res.status(201).json({ ok: true, item });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
 
 adminRouter.patch('/deal-cost-items/:id', async (req, res) => {
   const { label, amount } = req.body || {};
-  const item = await updateCostItem(req.params.id, {
+  const item = await updateCostItem(req.business_id, req.params.id, {
     label: label !== undefined ? cleanText(label, 200) : undefined,
     amount: amount !== undefined ? toNum(amount) : undefined,
   });
@@ -405,7 +403,7 @@ adminRouter.patch('/deal-cost-items/:id', async (req, res) => {
 });
 
 adminRouter.delete('/deal-cost-items/:id', async (req, res) => {
-  const ok = await deleteCostItem(req.params.id);
+  const ok = await deleteCostItem(req.business_id, req.params.id);
   if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true });
 });
@@ -413,9 +411,10 @@ adminRouter.delete('/deal-cost-items/:id', async (req, res) => {
 adminRouter.post('/deals/:id/milestones', async (req, res) => {
   const { label, due_date, amount, notes } = req.body || {};
   try {
-    const milestone = await addMilestone(req.params.id, {
+    const milestone = await addMilestone(req.business_id, req.params.id, {
       label: cleanText(label, 200), due_date: due_date || null, amount: toNum(amount), notes: cleanText(notes, 500),
     });
+    if (!milestone) return res.status(404).json({ ok: false, error: 'Not found' });
     res.status(201).json({ ok: true, milestone });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
@@ -423,7 +422,7 @@ adminRouter.post('/deals/:id/milestones', async (req, res) => {
 adminRouter.patch('/deal-milestones/:id', async (req, res) => {
   const { label, due_date, amount, paid_amount, paid_date, status, notes, actor } = req.body || {};
   try {
-    const milestone = await updateMilestone(req.params.id, {
+    const milestone = await updateMilestone(req.business_id, req.params.id, {
       label: label !== undefined ? cleanText(label, 200) : undefined,
       due_date: due_date !== undefined ? (due_date || null) : undefined,
       amount: amount !== undefined ? toNum(amount) : undefined,
@@ -438,7 +437,7 @@ adminRouter.patch('/deal-milestones/:id', async (req, res) => {
 });
 
 adminRouter.delete('/deal-milestones/:id', async (req, res) => {
-  const ok = await deleteMilestone(req.params.id);
+  const ok = await deleteMilestone(req.business_id, req.params.id);
   if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true });
 });
@@ -446,7 +445,8 @@ adminRouter.delete('/deal-milestones/:id', async (req, res) => {
 adminRouter.post('/deals/:id/documents', async (req, res) => {
   const { name, status, reference } = req.body || {};
   try {
-    const document = await addDocument(req.params.id, { name: cleanText(name, 200), status, reference: cleanText(reference, 500) });
+    const document = await addDocument(req.business_id, req.params.id, { name: cleanText(name, 200), status, reference: cleanText(reference, 500) });
+    if (!document) return res.status(404).json({ ok: false, error: 'Not found' });
     res.status(201).json({ ok: true, document });
   } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
 });
@@ -454,7 +454,7 @@ adminRouter.post('/deals/:id/documents', async (req, res) => {
 adminRouter.patch('/deal-documents/:id', async (req, res) => {
   const { name, status, reference } = req.body || {};
   try {
-    const document = await updateDocument(req.params.id, {
+    const document = await updateDocument(req.business_id, req.params.id, {
       name: name !== undefined ? cleanText(name, 200) : undefined,
       status,
       reference: reference !== undefined ? cleanText(reference, 500) : undefined,
@@ -465,13 +465,13 @@ adminRouter.patch('/deal-documents/:id', async (req, res) => {
 });
 
 adminRouter.delete('/deal-documents/:id', async (req, res) => {
-  const ok = await deleteDocument(req.params.id);
+  const ok = await deleteDocument(req.business_id, req.params.id);
   if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true });
 });
 
 adminRouter.get('/leads/:id', async (req, res) => {
-  const lead = await getLead(req.params.id);
+  const lead = await getLead(req.business_id, req.params.id);
   if (!lead) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, lead });
 });
@@ -524,7 +524,7 @@ adminRouter.patch('/leads/:id', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'No editable fields in request.' });
   }
 
-  const result = await updateLead(req.params.id, fields);
+  const result = await updateLead(req.business_id, req.params.id, fields);
   if (!result) return res.status(404).json({ ok: false, error: 'Not found' });
   const { before, after } = result;
   const actor = cleanText(body.actor, 100) || 'admin';
@@ -534,7 +534,7 @@ adminRouter.patch('/leads/:id', async (req, res) => {
     .map((k) => `${k.replace(/_/g, ' ')}: "${before[k] ?? '—'}" → "${after[k] ?? '—'}"`);
 
   if (changes.length) {
-    await addEvent(req.params.id, { event_type: 'note', note: `Lead details updated — ${changes.join('; ')}`, actor });
+    await addEvent(req.business_id, req.params.id, { event_type: 'note', note: `Lead details updated — ${changes.join('; ')}`, actor });
   }
 
   res.json({ ok: true, lead: after });
@@ -542,7 +542,7 @@ adminRouter.patch('/leads/:id', async (req, res) => {
 
 /** Deletes a lead outright. lead_events/deals/follow_ups cascade with it. */
 adminRouter.delete('/leads/:id', async (req, res) => {
-  const deleted = await deleteLead(req.params.id);
+  const deleted = await deleteLead(req.business_id, req.params.id);
   if (!deleted) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, deleted: true });
 });
@@ -558,11 +558,11 @@ adminRouter.post('/leads/:id/notes', async (req, res) => {
   const cleaned = cleanText(note, 2000);
   if (!cleaned) return res.status(400).json({ ok: false, error: 'note is required', field: 'note' });
 
-  const lead = await getLead(req.params.id);
+  const lead = await getLead(req.business_id, req.params.id);
   if (!lead) return res.status(404).json({ ok: false, error: 'Not found' });
 
-  await addEvent(req.params.id, { event_type: 'note', note: cleaned, actor: cleanText(actor, 100) || 'admin' });
-  res.status(201).json({ ok: true, lead: await getLead(req.params.id) });
+  await addEvent(req.business_id, req.params.id, { event_type: 'note', note: cleaned, actor: cleanText(actor, 100) || 'admin' });
+  res.status(201).json({ ok: true, lead: await getLead(req.business_id, req.params.id) });
 });
 
 adminRouter.patch('/leads/:id/status', async (req, res) => {
@@ -571,13 +571,13 @@ adminRouter.patch('/leads/:id/status', async (req, res) => {
   if (!allowed.includes(status)) {
     return res.status(400).json({ ok: false, error: `status must be one of ${allowed.join(', ')}` });
   }
-  const lead = await updateStatus(req.params.id, status, { actor: actor || 'admin', note });
+  const lead = await updateStatus(req.business_id, req.params.id, status, { actor: actor || 'admin', note });
   if (!lead) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, lead });
 });
 
 adminRouter.get('/report/source', async (req, res) => {
-  const rows = await sourceReport({ from: req.query.from, to: req.query.to });
+  const rows = await sourceReport(req.business_id, { from: req.query.from, to: req.query.to });
   res.json({ ok: true, rows });
 });
 
@@ -586,15 +586,16 @@ adminRouter.get('/report/ingest', async (req, res) => {
   const r = await raw(
     `SELECT source, outcome, reason, COUNT(*) AS n
        FROM ingest_log
-      WHERE created_at > now() - interval '30 days'
+      WHERE business_id = $1 AND created_at > now() - interval '30 days'
       GROUP BY source, outcome, reason
       ORDER BY n DESC`,
+    [req.business_id],
   );
   res.json({ ok: true, rows: r.rows });
 });
 
 adminRouter.get('/export.csv', async (req, res) => {
-  const rows = await listLeads({
+  const rows = await listLeads(req.business_id, {
     from: req.query.from, to: req.query.to, source: req.query.source, limit: 10_000,
   });
   const cols = [
@@ -627,8 +628,8 @@ adminRouter.get('/export.csv', async (req, res) => {
  */
 const EDITABLE_SETTINGS = ['company_name', 'dedupe_window_days'];
 
-adminRouter.get('/settings', async (_req, res) => {
-  res.json({ ok: true, settings: await listSettings() });
+adminRouter.get('/settings', async (req, res) => {
+  res.json({ ok: true, settings: await listSettings(req.business_id) });
 });
 
 adminRouter.patch('/settings', async (req, res) => {
@@ -647,9 +648,9 @@ adminRouter.patch('/settings', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'company_name cannot be blank', field: 'company_name' });
   }
   for (const key of updates) {
-    await setSetting(key, body[key]);
+    await setSetting(req.business_id, key, body[key]);
   }
-  res.json({ ok: true, settings: await listSettings() });
+  res.json({ ok: true, settings: await listSettings(req.business_id) });
 });
 
 /** Which lead sources are wired up (env vars present), and the URLs to paste into each platform. Never exposes secrets. */
@@ -658,13 +659,13 @@ adminRouter.get('/integration-status', async (req, res) => {
 });
 
 /** Row counts across the CRM's core tables, plus which database backend is running. */
-adminRouter.get('/data-stats', async (_req, res) => {
-  res.json({ ok: true, stats: await getDataStats() });
+adminRouter.get('/data-stats', async (req, res) => {
+  res.json({ ok: true, stats: await getDataStats(req.business_id) });
 });
 
 /** Deletes only leads flagged is_test (e.g. Google's "Send test data" button). Real leads are untouched. */
-adminRouter.post('/data/wipe-test-leads', async (_req, res) => {
-  const deleted = await wipeTestLeads();
+adminRouter.post('/data/wipe-test-leads', async (req, res) => {
+  const deleted = await wipeTestLeads(req.business_id);
   res.json({ ok: true, deleted });
 });
 
@@ -672,7 +673,8 @@ adminRouter.post('/data/wipe-test-leads', async (_req, res) => {
  * Re-run the builder/project directory seed. Guarded on an empty developers
  * table (same guard migrate.js uses on boot) — it will NOT overwrite or
  * duplicate a directory that's already populated, so this is safe to click
- * but only does something the first time.
+ * but only does something the first time. Global, not business-scoped — the
+ * developer directory is shared across every business.
  */
 adminRouter.post('/data/reseed-developers', async (_req, res) => {
   const result = await seedDeveloperDirectory();
@@ -684,19 +686,19 @@ adminRouter.post('/data/reseed-developers', async (_req, res) => {
  * free-text box where the same person could show up under three spellings.
  */
 adminRouter.get('/reps', async (req, res) => {
-  res.json({ ok: true, reps: await listReps({ activeOnly: req.query.active_only === '1' }) });
+  res.json({ ok: true, reps: await listReps(req.business_id, { activeOnly: req.query.active_only === '1' }) });
 });
 
 adminRouter.post('/reps', async (req, res) => {
   const name = (req.body || {}).name;
   if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
-  const rep = await createRep(name);
+  const rep = await createRep(req.business_id, name);
   res.status(201).json({ ok: true, rep });
 });
 
 adminRouter.patch('/reps/:id', async (req, res) => {
   const { name, is_active } = req.body || {};
-  const rep = await updateRep(req.params.id, {
+  const rep = await updateRep(req.business_id, req.params.id, {
     name: name !== undefined ? name : undefined,
     is_active: is_active !== undefined ? is_active : undefined,
   });
@@ -710,19 +712,19 @@ adminRouter.patch('/reps/:id', async (req, res) => {
  * `status`: see the PATCH /leads/:id comment above for why.
  */
 adminRouter.get('/tags', async (req, res) => {
-  res.json({ ok: true, tags: await listTags({ activeOnly: req.query.active_only === '1' }) });
+  res.json({ ok: true, tags: await listTags(req.business_id, { activeOnly: req.query.active_only === '1' }) });
 });
 
 adminRouter.post('/tags', async (req, res) => {
   const { name, color } = req.body || {};
   if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
-  const tag = await createTag(name, color);
+  const tag = await createTag(req.business_id, name, color);
   res.status(201).json({ ok: true, tag });
 });
 
 adminRouter.patch('/tags/:id', async (req, res) => {
   const { name, color, is_active } = req.body || {};
-  const tag = await updateTag(req.params.id, {
+  const tag = await updateTag(req.business_id, req.params.id, {
     name: name !== undefined ? name : undefined,
     color: color !== undefined ? color : undefined,
     is_active: is_active !== undefined ? is_active : undefined,
@@ -734,17 +736,17 @@ adminRouter.patch('/tags/:id', async (req, res) => {
 /**
  * Lead-capture forms — the "Contact Form 7" equivalent. Public rendering/
  * submission lives in routes/publicForm.js (unauthenticated, mounted at
- * /f/:public_id); these routes are the token-protected management API behind
- * the Forms page.
+ * /f/:public_id); these routes are the session-protected management API
+ * behind the Forms page.
  */
 adminRouter.get('/forms', async (req, res) => {
-  res.json({ ok: true, forms: await listForms() });
+  res.json({ ok: true, forms: await listForms(req.business_id) });
 });
 
 adminRouter.post('/forms', async (req, res) => {
   const { name, fields, developer_name, actor } = req.body || {};
   if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
-  const form = await createForm({
+  const form = await createForm(req.business_id, {
     name: cleanText(name, 200),
     fields,
     developer_name: developer_name ? cleanText(developer_name, 200) : null,
@@ -755,7 +757,7 @@ adminRouter.post('/forms', async (req, res) => {
 
 adminRouter.patch('/forms/:id', async (req, res) => {
   const { name, fields, developer_name, is_active } = req.body || {};
-  const form = await updateForm(req.params.id, {
+  const form = await updateForm(req.business_id, req.params.id, {
     name: name !== undefined ? cleanText(name, 200) : undefined,
     fields,
     developer_name: developer_name !== undefined ? (cleanText(developer_name, 200) || null) : undefined,
@@ -782,7 +784,7 @@ adminRouter.post('/forms/preview', async (req, res) => {
 });
 
 adminRouter.delete('/forms/:id', async (req, res) => {
-  const ok = await deleteForm(req.params.id);
+  const ok = await deleteForm(req.business_id, req.params.id);
   if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true });
 });
@@ -794,15 +796,15 @@ adminRouter.delete('/forms/:id', async (req, res) => {
  */
 adminRouter.get('/tickets', async (req, res) => {
   const { status, priority, department, assignee, lead_id, q, limit } = req.query;
-  res.json({ ok: true, tickets: await listTickets({ status, priority, department, assignee, lead_id, q, limit }) });
+  res.json({ ok: true, tickets: await listTickets(req.business_id, { status, priority, department, assignee, lead_id, q, limit }) });
 });
 
-adminRouter.get('/ticket-stats', async (_req, res) => {
-  res.json({ ok: true, stats: await ticketStats() });
+adminRouter.get('/ticket-stats', async (req, res) => {
+  res.json({ ok: true, stats: await ticketStats(req.business_id) });
 });
 
 adminRouter.get('/tickets/:id', async (req, res) => {
-  const ticket = await getTicket(req.params.id);
+  const ticket = await getTicket(req.business_id, req.params.id);
   if (!ticket) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true, ticket });
 });
@@ -811,7 +813,7 @@ adminRouter.post('/tickets', async (req, res) => {
   const { subject, description, department, priority, lead_id, requester, assignee, actor } = req.body || {};
   if (!cleanText(subject)) return res.status(400).json({ ok: false, error: 'subject is required', field: 'subject' });
   try {
-    const ticket = await createTicket({
+    const ticket = await createTicket(req.business_id, {
       subject: cleanText(subject, 300),
       description: cleanText(description, 4000),
       department,
@@ -830,7 +832,7 @@ adminRouter.post('/tickets', async (req, res) => {
 adminRouter.patch('/tickets/:id', async (req, res) => {
   const { subject, description, department, priority, status, assignee, requester, note, actor } = req.body || {};
   try {
-    const ticket = await updateTicket(req.params.id, {
+    const ticket = await updateTicket(req.business_id, req.params.id, {
       subject: subject !== undefined ? cleanText(subject, 300) : undefined,
       description: description !== undefined ? cleanText(description, 4000) : undefined,
       department,
@@ -849,7 +851,7 @@ adminRouter.patch('/tickets/:id', async (req, res) => {
 });
 
 adminRouter.delete('/tickets/:id', async (req, res) => {
-  const ok = await deleteTicket(req.params.id);
+  const ok = await deleteTicket(req.business_id, req.params.id);
   if (!ok) return res.status(404).json({ ok: false, error: 'Not found' });
   res.json({ ok: true });
 });

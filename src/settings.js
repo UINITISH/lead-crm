@@ -4,6 +4,9 @@
  * display name shown in the sidebar. Deliberately excludes anything secret
  * (tokens, API keys) — those stay in .env, never round-trip through an API
  * response the admin UI can read.
+ *
+ * Multi-tenant: app_settings' primary key is (business_id, key), not just
+ * `key` — every business has its own company_name, its own dedupe window.
  */
 import { query, one } from './db.js';
 import { getDbKind } from './db.js';
@@ -14,24 +17,24 @@ const DEFAULTS = {
   dedupe_window_days: String(process.env.DEDUPE_WINDOW_DAYS || 30),
 };
 
-export async function getSetting(key) {
-  const row = await one(`SELECT value FROM app_settings WHERE key = $1`, [key]);
+export async function getSetting(businessId, key) {
+  const row = await one(`SELECT value FROM app_settings WHERE business_id = $1 AND key = $2`, [businessId, key]);
   return row?.value ?? DEFAULTS[key] ?? null;
 }
 
-export async function setSetting(key, value) {
+export async function setSetting(businessId, key, value) {
   const res = await query(
-    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
-     ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()
+    `INSERT INTO app_settings (business_id, key, value, updated_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (business_id, key) DO UPDATE SET value = $3, updated_at = now()
      RETURNING *`,
-    [key, String(value)],
+    [businessId, key, String(value)],
   );
   return res.rows[0];
 }
 
-/** All known settings, defaults merged in — what the Settings page renders as a form. */
-export async function listSettings() {
-  const res = await query(`SELECT key, value FROM app_settings`);
+/** All known settings for this business, defaults merged in — what the Settings page renders as a form. */
+export async function listSettings(businessId) {
+  const res = await query(`SELECT key, value FROM app_settings WHERE business_id = $1`, [businessId]);
   const stored = Object.fromEntries(res.rows.map((r) => [r.key, r.value]));
   return { ...DEFAULTS, ...stored };
 }
@@ -40,6 +43,11 @@ export async function listSettings() {
  * Which lead sources are wired up, and the exact URLs to paste into each
  * platform's dashboard. Presence-only booleans — never returns the actual
  * secret values.
+ *
+ * NOTE: the Meta/Google webhook credentials themselves (META_VERIFY_TOKEN
+ * etc.) are still a single global .env-level config, not yet per-business —
+ * only one client's Meta/Google ad account can be wired up at a time. The
+ * website form embed (lead_forms) IS fully per-business already.
  */
 export function getIntegrationStatus(req) {
   const base = `${req.protocol}://${req.get('host')}`;
@@ -66,16 +74,17 @@ export function getIntegrationStatus(req) {
   };
 }
 
-export async function getDataStats() {
+export async function getDataStats(businessId) {
   const counts = await one(
     `SELECT
-        (SELECT COUNT(*) FROM leads)      AS leads,
-        (SELECT COUNT(*) FROM leads WHERE is_test) AS test_leads,
+        (SELECT COUNT(*) FROM leads WHERE business_id = $1)      AS leads,
+        (SELECT COUNT(*) FROM leads WHERE business_id = $1 AND is_test) AS test_leads,
         (SELECT COUNT(*) FROM developers) AS developers,
         (SELECT COUNT(*) FROM projects)   AS projects,
-        (SELECT COUNT(*) FROM deals)      AS deals,
-        (SELECT COUNT(*) FROM follow_ups) AS follow_ups,
-        (SELECT COUNT(*) FROM ingest_log) AS ingest_log_rows`,
+        (SELECT COUNT(*) FROM deals WHERE business_id = $1)      AS deals,
+        (SELECT COUNT(*) FROM follow_ups WHERE business_id = $1) AS follow_ups,
+        (SELECT COUNT(*) FROM ingest_log WHERE business_id = $1) AS ingest_log_rows`,
+    [businessId],
   );
   return {
     leads: Number(counts.leads),
@@ -90,7 +99,7 @@ export async function getDataStats() {
 }
 
 /** Deletes leads flagged is_test (Google's "Send test data", etc). Real leads are untouched. */
-export async function wipeTestLeads() {
-  const res = await query(`DELETE FROM leads WHERE is_test = TRUE RETURNING id`);
+export async function wipeTestLeads(businessId) {
+  const res = await query(`DELETE FROM leads WHERE business_id = $1 AND is_test = TRUE RETURNING id`, [businessId]);
   return res.rowCount;
 }

@@ -12,6 +12,7 @@
 import express from 'express';
 import crypto from 'node:crypto';
 import { insertLead, logIngest } from '../leads.js';
+import { getDefaultBusinessId } from '../auth.js';
 import {
   normalizePhone, normalizeEmail, cleanText, extractAttribution, inferSource,
 } from '../normalize.js';
@@ -53,27 +54,28 @@ function verifySignature(req) {
 websiteRouter.post('/website', async (req, res) => {
   const ip = req.ip;
   const body = req.body || {};
+  const businessId = await getDefaultBusinessId();
 
   if (rateLimited(ip)) {
-    await logIngest({ source: 'website', outcome: 'rejected', reason: 'rate limited', http_status: 429, payload: body });
+    await logIngest(businessId, { source: 'website', outcome: 'rejected', reason: 'rate limited', http_status: 429, payload: body });
     return res.status(429).json({ ok: false, error: 'Too many requests' });
   }
 
   const sig = verifySignature(req);
   if (!sig.ok) {
-    await logIngest({ source: 'website', outcome: 'rejected', reason: sig.reason, http_status: 401, payload: body });
+    await logIngest(businessId, { source: 'website', outcome: 'rejected', reason: sig.reason, http_status: 401, payload: body });
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
 
   // Honeypot: a hidden field real users never fill. Cheapest bot filter there is.
   if (cleanText(body.company_website)) {
-    await logIngest({ source: 'website', outcome: 'rejected', reason: 'honeypot', http_status: 200, payload: body });
+    await logIngest(businessId, { source: 'website', outcome: 'rejected', reason: 'honeypot', http_status: 200, payload: body });
     return res.status(200).json({ ok: true }); // lie to the bot
   }
 
   const phone_e164 = normalizePhone(body.phone);
   if (!phone_e164) {
-    await logIngest({ source: 'website', outcome: 'rejected', reason: 'invalid phone', http_status: 400, payload: body });
+    await logIngest(businessId, { source: 'website', outcome: 'rejected', reason: 'invalid phone', http_status: 400, payload: body });
     return res.status(400).json({ ok: false, error: 'A valid phone number is required', field: 'phone' });
   }
 
@@ -88,7 +90,7 @@ websiteRouter.post('/website', async (req, res) => {
   const attr = extractAttribution({ ...(tracker.last_touch || {}), ...body });
 
   try {
-    const { lead, outcome } = await insertLead({
+    const { lead, outcome } = await insertLead(businessId, {
       full_name:    cleanText(body.full_name ?? body.name, 200),
       phone_raw:    cleanText(body.phone, 50),
       phone_e164,
@@ -110,11 +112,11 @@ websiteRouter.post('/website', async (req, res) => {
       submitted_at:  new Date().toISOString(),
     });
 
-    await logIngest({ source: 'website', outcome, lead_id: lead.id, http_status: 201, payload: body });
+    await logIngest(businessId, { source: 'website', outcome, lead_id: lead.id, http_status: 201, payload: body });
     return res.status(201).json({ ok: true, lead_id: lead.id, duplicate: outcome === 'duplicate' });
   } catch (err) {
     console.error('[website] insert failed:', err);
-    await logIngest({ source: 'website', outcome: 'error', reason: err.message, http_status: 500, payload: body });
+    await logIngest(businessId, { source: 'website', outcome: 'error', reason: err.message, http_status: 500, payload: body });
     return res.status(500).json({ ok: false, error: 'Could not save lead' });
   }
 });

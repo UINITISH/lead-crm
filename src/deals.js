@@ -4,6 +4,14 @@
  * created once a lead reaches negotiation (enforced by the caller in
  * routes/admin.js), and carries fields a lead never has: which unit, the
  * agreed price, and an expected close date.
+ *
+ * Multi-tenant: `deals` has its own business_id column, checked directly.
+ * The four booking sub-resource tables (deal_applicants, deal_cost_items,
+ * deal_payment_milestones, deal_documents) do NOT have their own
+ * business_id — they're reached through deal_id, so every by-id operation
+ * on them (update/delete) joins through `deals` to confirm it belongs to
+ * `businessId` before touching anything. Skipping that join is exactly the
+ * kind of bug that would let one client edit another client's booking.
  */
 import { query, one } from './db.js';
 import { addEvent } from './leads.js';
@@ -11,16 +19,17 @@ import { addEvent } from './leads.js';
 const STAGES = ['negotiation', 'booked', 'closed_won', 'closed_lost'];
 export { STAGES as DEAL_STAGES };
 
-export async function createDeal({ lead_id, unit_number = null, agreed_price = null,
+export async function createDeal(businessId, { lead_id, unit_number = null, agreed_price = null,
   expected_closing_date = null, notes = null, created_by = null }) {
-  const lead = await one(`SELECT developer_name, project_name FROM leads WHERE id = $1`, [lead_id]);
+  const lead = await one(`SELECT developer_name, project_name FROM leads WHERE id = $1 AND business_id = $2`, [lead_id, businessId]);
+  if (!lead) return null;
   const res = await query(
-    `INSERT INTO deals (lead_id, developer_name, project_name, unit_number, agreed_price, expected_closing_date, notes, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [lead_id, lead?.developer_name ?? null, lead?.project_name ?? null, unit_number, agreed_price, expected_closing_date, notes, created_by],
+    `INSERT INTO deals (business_id, lead_id, developer_name, project_name, unit_number, agreed_price, expected_closing_date, notes, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [businessId, lead_id, lead.developer_name ?? null, lead.project_name ?? null, unit_number, agreed_price, expected_closing_date, notes, created_by],
   );
   const deal = res.rows[0];
-  await addEvent(lead_id, {
+  await addEvent(businessId, lead_id, {
     event_type: 'note',
     note: `Deal opened${unit_number ? ' for unit ' + unit_number : ''}${agreed_price ? ' at ₹' + agreed_price + 'L' : ''}`,
     actor: created_by || 'admin',
@@ -28,14 +37,15 @@ export async function createDeal({ lead_id, unit_number = null, agreed_price = n
   return deal;
 }
 
-export async function listDeals({ stage, limit = 200 } = {}) {
-  const where = stage ? `WHERE d.stage = $1` : '';
-  const params = stage ? [stage] : [];
+export async function listDeals(businessId, { stage, limit = 200 } = {}) {
+  const params = [businessId];
+  const where = ['d.business_id = $1'];
+  if (stage) { params.push(stage); where.push(`d.stage = $${params.length}`); }
   const res = await query(
     `SELECT d.*, l.full_name, l.phone_e164, l.source
        FROM deals d
        JOIN leads l ON l.id = d.lead_id
-       ${where}
+      WHERE ${where.join(' AND ')}
       ORDER BY d.updated_at DESC
       LIMIT ${Math.min(Number(limit) || 200, 500)}`,
     params,
@@ -43,20 +53,23 @@ export async function listDeals({ stage, limit = 200 } = {}) {
   return res.rows;
 }
 
-export async function listForLead(leadId) {
+export async function listForLead(businessId, leadId) {
   const res = await query(
-    `SELECT * FROM deals WHERE lead_id = $1 ORDER BY created_at DESC`,
-    [leadId],
+    `SELECT * FROM deals WHERE lead_id = $1 AND business_id = $2 ORDER BY created_at DESC`,
+    [leadId, businessId],
   );
   return res.rows;
 }
 
-export async function getDeal(id) {
-  return one(`SELECT d.*, l.full_name, l.phone_e164 FROM deals d JOIN leads l ON l.id = d.lead_id WHERE d.id = $1`, [id]);
+export async function getDeal(businessId, id) {
+  return one(
+    `SELECT d.*, l.full_name, l.phone_e164 FROM deals d JOIN leads l ON l.id = d.lead_id WHERE d.id = $1 AND d.business_id = $2`,
+    [id, businessId],
+  );
 }
 
-export async function updateDeal(id, { stage, unit_number, agreed_price, expected_closing_date, notes, actor } = {}) {
-  const current = await one(`SELECT * FROM deals WHERE id = $1`, [id]);
+export async function updateDeal(businessId, id, { stage, unit_number, agreed_price, expected_closing_date, notes, actor } = {}) {
+  const current = await one(`SELECT * FROM deals WHERE id = $1 AND business_id = $2`, [id, businessId]);
   if (!current) return null;
 
   if (stage && !STAGES.includes(stage)) {
@@ -65,10 +78,10 @@ export async function updateDeal(id, { stage, unit_number, agreed_price, expecte
 
   const res = await query(
     `UPDATE deals SET
-        stage = $2, unit_number = $3, agreed_price = $4, expected_closing_date = $5, notes = $6
-      WHERE id = $1 RETURNING *`,
+        stage = $3, unit_number = $4, agreed_price = $5, expected_closing_date = $6, notes = $7
+      WHERE id = $1 AND business_id = $2 RETURNING *`,
     [
-      id,
+      id, businessId,
       stage ?? current.stage,
       unit_number !== undefined ? unit_number : current.unit_number,
       agreed_price !== undefined ? agreed_price : current.agreed_price,
@@ -78,7 +91,7 @@ export async function updateDeal(id, { stage, unit_number, agreed_price, expecte
   );
 
   if (stage && stage !== current.stage) {
-    await addEvent(current.lead_id, {
+    await addEvent(businessId, current.lead_id, {
       event_type: 'note',
       note: `Deal moved to ${stage.replace('_', ' ')}`,
       actor: actor || 'admin',
@@ -92,18 +105,27 @@ export async function updateDeal(id, { stage, unit_number, agreed_price, expecte
 // deal is underway: who's on the application, what the total cost breaks
 // down to, the payment schedule against it, and a document checklist. Each
 // sub-resource is its own small table (deal_applicants/deal_cost_items/
-// deal_payment_milestones/deal_documents), all scoped to one deal_id.
+// deal_payment_milestones/deal_documents), all scoped to one deal_id — and
+// via that deal_id, to `businessId`.
 // ---------------------------------------------------------------------------
 
-export async function listApplicants(dealId) {
+/** Confirms `dealId` belongs to `businessId` — used before every sub-resource write. */
+async function ownsDeal(businessId, dealId) {
+  const row = await one(`SELECT id FROM deals WHERE id = $1 AND business_id = $2`, [dealId, businessId]);
+  return Boolean(row);
+}
+
+export async function listApplicants(businessId, dealId) {
+  if (!(await ownsDeal(businessId, dealId))) return [];
   const res = await query(
     `SELECT * FROM deal_applicants WHERE deal_id = $1 ORDER BY sort_order, created_at`, [dealId],
   );
   return res.rows;
 }
 
-export async function addApplicant(dealId, { full_name, relation = 'primary', phone = null, email = null,
+export async function addApplicant(businessId, dealId, { full_name, relation = 'primary', phone = null, email = null,
   pan = null, aadhaar = null, address = null, notes = null, sort_order = 0 }) {
+  if (!(await ownsDeal(businessId, dealId))) return null;
   if (!full_name || !full_name.trim()) throw new Error('full_name is required');
   if (!['primary', 'co_applicant'].includes(relation)) throw new Error('relation must be primary or co_applicant');
   const res = await query(
@@ -114,8 +136,11 @@ export async function addApplicant(dealId, { full_name, relation = 'primary', ph
   return res.rows[0];
 }
 
-export async function updateApplicant(id, fields = {}) {
-  const current = await one(`SELECT * FROM deal_applicants WHERE id = $1`, [id]);
+export async function updateApplicant(businessId, id, fields = {}) {
+  const current = await one(
+    `SELECT a.* FROM deal_applicants a JOIN deals d ON d.id = a.deal_id WHERE a.id = $1 AND d.business_id = $2`,
+    [id, businessId],
+  );
   if (!current) return null;
   if (fields.relation && !['primary', 'co_applicant'].includes(fields.relation)) {
     throw new Error('relation must be primary or co_applicant');
@@ -139,19 +164,25 @@ export async function updateApplicant(id, fields = {}) {
   return res.rows[0];
 }
 
-export async function deleteApplicant(id) {
-  const res = await query(`DELETE FROM deal_applicants WHERE id = $1 RETURNING id`, [id]);
+export async function deleteApplicant(businessId, id) {
+  const res = await query(
+    `DELETE FROM deal_applicants a USING deals d
+      WHERE a.id = $1 AND d.id = a.deal_id AND d.business_id = $2 RETURNING a.id`,
+    [id, businessId],
+  );
   return res.rows.length > 0;
 }
 
-export async function listCostItems(dealId) {
+export async function listCostItems(businessId, dealId) {
+  if (!(await ownsDeal(businessId, dealId))) return [];
   const res = await query(
     `SELECT * FROM deal_cost_items WHERE deal_id = $1 ORDER BY sort_order, created_at`, [dealId],
   );
   return res.rows;
 }
 
-export async function addCostItem(dealId, { label, amount = 0, sort_order = 0 }) {
+export async function addCostItem(businessId, dealId, { label, amount = 0, sort_order = 0 }) {
+  if (!(await ownsDeal(businessId, dealId))) return null;
   if (!label || !label.trim()) throw new Error('label is required');
   const res = await query(
     `INSERT INTO deal_cost_items (deal_id, label, amount, sort_order) VALUES ($1,$2,$3,$4) RETURNING *`,
@@ -160,8 +191,11 @@ export async function addCostItem(dealId, { label, amount = 0, sort_order = 0 })
   return res.rows[0];
 }
 
-export async function updateCostItem(id, fields = {}) {
-  const current = await one(`SELECT * FROM deal_cost_items WHERE id = $1`, [id]);
+export async function updateCostItem(businessId, id, fields = {}) {
+  const current = await one(
+    `SELECT c.* FROM deal_cost_items c JOIN deals d ON d.id = c.deal_id WHERE c.id = $1 AND d.business_id = $2`,
+    [id, businessId],
+  );
   if (!current) return null;
   const res = await query(
     `UPDATE deal_cost_items SET label = $2, amount = $3 WHERE id = $1 RETURNING *`,
@@ -174,12 +208,17 @@ export async function updateCostItem(id, fields = {}) {
   return res.rows[0];
 }
 
-export async function deleteCostItem(id) {
-  const res = await query(`DELETE FROM deal_cost_items WHERE id = $1 RETURNING id`, [id]);
+export async function deleteCostItem(businessId, id) {
+  const res = await query(
+    `DELETE FROM deal_cost_items c USING deals d
+      WHERE c.id = $1 AND d.id = c.deal_id AND d.business_id = $2 RETURNING c.id`,
+    [id, businessId],
+  );
   return res.rows.length > 0;
 }
 
-export async function listMilestones(dealId) {
+export async function listMilestones(businessId, dealId) {
+  if (!(await ownsDeal(businessId, dealId))) return [];
   const res = await query(
     `SELECT * FROM deal_payment_milestones WHERE deal_id = $1 ORDER BY sort_order, due_date NULLS LAST, created_at`,
     [dealId],
@@ -187,7 +226,8 @@ export async function listMilestones(dealId) {
   return res.rows;
 }
 
-export async function addMilestone(dealId, { label, due_date = null, amount = 0, notes = null, sort_order = 0 }) {
+export async function addMilestone(businessId, dealId, { label, due_date = null, amount = 0, notes = null, sort_order = 0 }) {
+  if (!(await ownsDeal(businessId, dealId))) return null;
   if (!label || !label.trim()) throw new Error('label is required');
   const res = await query(
     `INSERT INTO deal_payment_milestones (deal_id, label, due_date, amount, notes, sort_order)
@@ -204,8 +244,12 @@ export async function addMilestone(dealId, { label, due_date = null, amount = 0,
  * (via the deal's lead_id) since "payment received" is the one booking event
  * genuinely worth surfacing there.
  */
-export async function updateMilestone(id, fields = {}, { actor = 'admin' } = {}) {
-  const current = await one(`SELECT * FROM deal_payment_milestones WHERE id = $1`, [id]);
+export async function updateMilestone(businessId, id, fields = {}, { actor = 'admin' } = {}) {
+  const current = await one(
+    `SELECT m.*, d.lead_id AS deal_lead_id FROM deal_payment_milestones m
+       JOIN deals d ON d.id = m.deal_id WHERE m.id = $1 AND d.business_id = $2`,
+    [id, businessId],
+  );
   if (!current) return null;
   if (fields.status && !['pending', 'paid', 'overdue'].includes(fields.status)) {
     throw new Error('status must be one of pending, paid, overdue');
@@ -238,32 +282,35 @@ export async function updateMilestone(id, fields = {}, { actor = 'admin' } = {})
     ],
   );
 
-  if (becamePaid) {
-    const deal = await one(`SELECT lead_id FROM deals WHERE id = $1`, [current.deal_id]);
-    if (deal?.lead_id) {
-      await addEvent(deal.lead_id, {
-        event_type: 'note',
-        note: `Payment received — ${current.label}: ₹${nextPaidAmount}L`,
-        actor,
-      });
-    }
+  if (becamePaid && current.deal_lead_id) {
+    await addEvent(businessId, current.deal_lead_id, {
+      event_type: 'note',
+      note: `Payment received — ${current.label}: ₹${nextPaidAmount}L`,
+      actor,
+    });
   }
   return res.rows[0];
 }
 
-export async function deleteMilestone(id) {
-  const res = await query(`DELETE FROM deal_payment_milestones WHERE id = $1 RETURNING id`, [id]);
+export async function deleteMilestone(businessId, id) {
+  const res = await query(
+    `DELETE FROM deal_payment_milestones m USING deals d
+      WHERE m.id = $1 AND d.id = m.deal_id AND d.business_id = $2 RETURNING m.id`,
+    [id, businessId],
+  );
   return res.rows.length > 0;
 }
 
-export async function listDocuments(dealId) {
+export async function listDocuments(businessId, dealId) {
+  if (!(await ownsDeal(businessId, dealId))) return [];
   const res = await query(
     `SELECT * FROM deal_documents WHERE deal_id = $1 ORDER BY sort_order, created_at`, [dealId],
   );
   return res.rows;
 }
 
-export async function addDocument(dealId, { name, status = 'pending', reference = null, sort_order = 0 }) {
+export async function addDocument(businessId, dealId, { name, status = 'pending', reference = null, sort_order = 0 }) {
+  if (!(await ownsDeal(businessId, dealId))) return null;
   if (!name || !name.trim()) throw new Error('name is required');
   if (status && !['pending', 'received', 'verified'].includes(status)) {
     throw new Error('status must be one of pending, received, verified');
@@ -275,8 +322,11 @@ export async function addDocument(dealId, { name, status = 'pending', reference 
   return res.rows[0];
 }
 
-export async function updateDocument(id, fields = {}) {
-  const current = await one(`SELECT * FROM deal_documents WHERE id = $1`, [id]);
+export async function updateDocument(businessId, id, fields = {}) {
+  const current = await one(
+    `SELECT doc.* FROM deal_documents doc JOIN deals d ON d.id = doc.deal_id WHERE doc.id = $1 AND d.business_id = $2`,
+    [id, businessId],
+  );
   if (!current) return null;
   if (fields.status && !['pending', 'received', 'verified'].includes(fields.status)) {
     throw new Error('status must be one of pending, received, verified');
@@ -293,8 +343,12 @@ export async function updateDocument(id, fields = {}) {
   return res.rows[0];
 }
 
-export async function deleteDocument(id) {
-  const res = await query(`DELETE FROM deal_documents WHERE id = $1 RETURNING id`, [id]);
+export async function deleteDocument(businessId, id) {
+  const res = await query(
+    `DELETE FROM deal_documents doc USING deals d
+      WHERE doc.id = $1 AND d.id = doc.deal_id AND d.business_id = $2 RETURNING doc.id`,
+    [id, businessId],
+  );
   return res.rows.length > 0;
 }
 
@@ -302,11 +356,14 @@ export async function deleteDocument(id) {
  * Everything the Bookings panel needs in one round trip, plus the rollup
  * numbers (total cost from the cost sheet, total paid/due from the payment
  * schedule) that turn a list of line items into an actual answer to "how
- * much is left to collect on this booking".
+ * much is left to collect on this booking". Returns null if the deal isn't
+ * this business's.
  */
-export async function getBooking(dealId) {
+export async function getBooking(businessId, dealId) {
+  if (!(await ownsDeal(businessId, dealId))) return null;
   const [applicants, cost_items, milestones, documents] = await Promise.all([
-    listApplicants(dealId), listCostItems(dealId), listMilestones(dealId), listDocuments(dealId),
+    listApplicants(businessId, dealId), listCostItems(businessId, dealId),
+    listMilestones(businessId, dealId), listDocuments(businessId, dealId),
   ]);
   const total_cost = cost_items.reduce((sum, c) => sum + Number(c.amount), 0);
   const total_paid = milestones.reduce((sum, m) => sum + Number(m.paid_amount), 0);
@@ -323,7 +380,7 @@ export async function getBooking(dealId) {
 }
 
 /** Summary stats for the Deals page: totals, value, closing soon, win rate. */
-export async function dealStats() {
+export async function dealStats(businessId) {
   const totals = await one(
     `SELECT
         COUNT(*)                                                                    AS total,
@@ -335,18 +392,20 @@ export async function dealStats() {
                             AND expected_closing_date >= date_trunc('month', now())
                             AND expected_closing_date <  date_trunc('month', now()) + interval '1 month'
                             AND stage IN ('negotiation','booked'))                    AS closing_this_month
-     FROM deals`,
+     FROM deals WHERE business_id = $1`,
+    [businessId],
   );
   const closedTotal = Number(totals.won) + Number(totals.lost);
 
   // Business-wide booking collection numbers — how much the cost sheets
   // across every deal add up to vs. how much has actually been paid against
-  // the payment schedules. Global sums, not per-deal, so this stays cheap
-  // even as the number of deals grows.
+  // the payment schedules. Scoped through a join to deals, since the two
+  // detail tables have no business_id of their own.
   const payments = await one(
     `SELECT
-        (SELECT COALESCE(SUM(amount), 0) FROM deal_cost_items)             AS total_cost,
-        (SELECT COALESCE(SUM(paid_amount), 0) FROM deal_payment_milestones) AS total_paid`,
+        (SELECT COALESCE(SUM(c.amount), 0) FROM deal_cost_items c JOIN deals d ON d.id = c.deal_id WHERE d.business_id = $1) AS total_cost,
+        (SELECT COALESCE(SUM(m.paid_amount), 0) FROM deal_payment_milestones m JOIN deals d ON d.id = m.deal_id WHERE d.business_id = $1) AS total_paid`,
+    [businessId],
   );
   const total_cost = Number(payments.total_cost);
   const total_paid = Number(payments.total_paid);

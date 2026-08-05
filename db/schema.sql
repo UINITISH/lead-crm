@@ -14,6 +14,30 @@
 -- gen_random_uuid() is core Postgres from v13 onward — no pgcrypto needed.
 
 -- ---------------------------------------------------------------------------
+-- businesses — one row per client using this CRM. Each business's data
+-- (leads, deals, forms, tickets, follow-ups, reps, tags, settings, ingest
+-- log) is scoped to it and invisible to every other business — that's the
+-- entire point. developers/projects/project_unit_types stay a SHARED
+-- read-only catalog across all businesses (public builder/project info, not
+-- client-specific), so they deliberately have no business_id.
+--
+-- Child/detail tables (lead_events, ticket_events, deal_applicants,
+-- deal_cost_items, deal_payment_milestones, deal_documents) don't carry
+-- their own business_id either — they're always reached through their
+-- parent (lead_id/deal_id/ticket_id), which IS scoped, and every query that
+-- fetches them must join through that parent rather than trusting a bare id.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS businesses (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name           TEXT NOT NULL,
+  email          TEXT NOT NULL,
+  password_hash  TEXT,             -- NULL until a password is set via scripts/create-business.js
+  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS businesses_email_uniq ON businesses (LOWER(email));
+
+-- ---------------------------------------------------------------------------
 -- projects
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS projects (
@@ -186,6 +210,17 @@ CREATE INDEX IF NOT EXISTS leads_entry_method_idx ON leads (entry_method);
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS budget_min NUMERIC;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS budget_max NUMERIC;
 
+-- ---- tenant scope -------------------------------------------------------
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS leads_business_idx ON leads (business_id);
+-- The Meta/Google webhook idempotency guarantee is per-business now, not
+-- global — two different clients each running their own Meta ad account can
+-- coincidentally get the same leadgen_id from Meta's side without colliding.
+DROP INDEX IF EXISTS leads_platform_lead_id_uniq;
+CREATE UNIQUE INDEX IF NOT EXISTS leads_platform_lead_id_uniq
+  ON leads (business_id, source, platform_lead_id)
+  WHERE platform_lead_id IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
 -- lead_events — the lifecycle audit trail
 -- ---------------------------------------------------------------------------
@@ -229,6 +264,9 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS deals_lead_idx  ON deals (lead_id);
 CREATE INDEX IF NOT EXISTS deals_stage_idx ON deals (stage);
 
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS deals_business_idx ON deals (business_id);
+
 -- ---------------------------------------------------------------------------
 -- follow_ups — "call this lead back on X" reminders. Nothing like this
 -- existed before; it's the backing table for the dashboard's upcoming
@@ -248,6 +286,9 @@ CREATE TABLE IF NOT EXISTS follow_ups (
 CREATE INDEX IF NOT EXISTS follow_ups_due_idx  ON follow_ups (due_at) WHERE is_done = FALSE;
 CREATE INDEX IF NOT EXISTS follow_ups_lead_idx ON follow_ups (lead_id);
 
+ALTER TABLE follow_ups ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS follow_ups_business_idx ON follow_ups (business_id);
+
 -- ---------------------------------------------------------------------------
 -- app_settings — small key/value store for things that were previously only
 -- changeable by editing .env and restarting (dedupe window, display name).
@@ -259,6 +300,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value       TEXT,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- business_id is added here, but the PRIMARY KEY isn't switched to the
+-- composite (business_id, key) until migrate.js's JS-side backfill step —
+-- that needs every existing row's business_id filled in first (a bare
+-- PRIMARY KEY can't be added over NULLs), and the default business doesn't
+-- exist yet at the point this plain-SQL file runs. See migrate.js.
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
 
 -- ---------------------------------------------------------------------------
 -- reps — the managed team-member list. Replaces free-typed "Acting as" text
@@ -271,7 +318,12 @@ CREATE TABLE IF NOT EXISTS reps (
   is_active   BOOLEAN NOT NULL DEFAULT TRUE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS reps_name_uniq ON reps (LOWER(name));
+ALTER TABLE reps ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS reps_business_idx ON reps (business_id);
+-- Two different businesses can each have a rep named "Arjun" — uniqueness is
+-- per business now, not global.
+DROP INDEX IF EXISTS reps_name_uniq;
+CREATE UNIQUE INDEX IF NOT EXISTS reps_name_uniq ON reps (business_id, LOWER(name));
 
 -- ---------------------------------------------------------------------------
 -- ingest_log — every inbound hit, accepted or not
@@ -290,6 +342,9 @@ CREATE TABLE IF NOT EXISTS ingest_log (
 );
 CREATE INDEX IF NOT EXISTS ingest_log_created_idx ON ingest_log (created_at DESC);
 CREATE INDEX IF NOT EXISTS ingest_log_outcome_idx ON ingest_log (outcome);
+
+ALTER TABLE ingest_log ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS ingest_log_business_idx ON ingest_log (business_id);
 
 -- ---------------------------------------------------------------------------
 -- lead_tags — a managed, editable label ("Warm", "Cold", "Junk", "Scheduled",
@@ -311,7 +366,10 @@ CREATE TABLE IF NOT EXISTS lead_tags (
   sort_order  INT NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS lead_tags_name_uniq ON lead_tags (LOWER(name));
+ALTER TABLE lead_tags ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS lead_tags_business_idx ON lead_tags (business_id);
+DROP INDEX IF EXISTS lead_tags_name_uniq;
+CREATE UNIQUE INDEX IF NOT EXISTS lead_tags_name_uniq ON lead_tags (business_id, LOWER(name));
 
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag TEXT;
 CREATE INDEX IF NOT EXISTS leads_tag_idx ON leads (tag);
@@ -345,6 +403,14 @@ CREATE TABLE IF NOT EXISTS lead_forms (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS lead_forms_public_id_uniq ON lead_forms (public_id);
+
+-- public_id stays a single GLOBAL namespace on purpose — /f/:public_id is one
+-- shared public URL space, not scoped per business, and an 8-char random
+-- token colliding across two different businesses is astronomically unlikely.
+-- business_id is what tells a submission through that form which business's
+-- leads table it belongs to.
+ALTER TABLE lead_forms ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS lead_forms_business_idx ON lead_forms (business_id);
 
 -- Freeform, admin-editable field list — first name / last name / email /
 -- budget / which-project / message by default, but any of them can be
@@ -394,6 +460,9 @@ CREATE INDEX IF NOT EXISTS tickets_priority_idx  ON tickets (priority);
 CREATE INDEX IF NOT EXISTS tickets_assignee_idx  ON tickets (assignee);
 CREATE INDEX IF NOT EXISTS tickets_lead_idx      ON tickets (lead_id);
 CREATE INDEX IF NOT EXISTS tickets_created_idx   ON tickets (created_at DESC);
+
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES businesses(id);
+CREATE INDEX IF NOT EXISTS tickets_business_idx ON tickets (business_id);
 
 -- Same audit-trail pattern as lead_events — a status change or a note leaves
 -- a permanent trace instead of silently overwriting the ticket row.

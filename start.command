@@ -62,13 +62,12 @@ META_VERIFY_TOKEN=$(RAND)
 META_APP_SECRET=
 META_PAGE_ACCESS_TOKEN=
 META_GRAPH_VERSION=v21.0
-ADMIN_TOKEN=local-preview
+SESSION_SECRET=$(RAND)
+DEFAULT_BUSINESS_NAME=Core Value Realty
+DEFAULT_BUSINESS_EMAIL=local@localhost
 EOF
 fi
 
-# tail -1 mirrors dotenv's last-wins behaviour if the file was hand-edited.
-ADMIN=$(grep '^ADMIN_TOKEN=' .env | tail -1 | cut -d= -f2-)
-[ -z "$ADMIN" ] && ADMIN="local-preview"
 PORT=$(grep '^PORT=' .env | tail -1 | cut -d= -f2- | tr -d ' ')
 [ -z "$PORT" ] && PORT=3400
 
@@ -91,20 +90,35 @@ if [ ! -d node_modules ] || [ ! -d node_modules/express ]; then
 fi
 echo "  Dependencies ready"
 
-# --- 4. Sample data --------------------------------------------------------
+# --- 4. Sample data + first-run login ---------------------------------------
+FIRST_RUN=0
 if [ ! -d .pgdata ]; then
+  FIRST_RUN=1
   echo "  Seeding sample leads…"
   npm run seed --silent >/dev/null 2>&1 || echo "  (seed skipped)"
+fi
+
+LOGIN_EMAIL=$(grep '^DEFAULT_BUSINESS_EMAIL=' .env | tail -1 | cut -d= -f2-)
+[ -z "$LOGIN_EMAIL" ] && LOGIN_EMAIL="local@localhost"
+LOGIN_NAME=$(grep '^DEFAULT_BUSINESS_NAME=' .env | tail -1 | cut -d= -f2-)
+[ -z "$LOGIN_NAME" ] && LOGIN_NAME="Core Value Realty"
+
+if [ "$FIRST_RUN" = "1" ]; then
+  # migrate() (run on server start) creates the first business account with
+  # no password set — give it one now so there's something to log in with.
+  npm run migrate --silent >/dev/null 2>&1
+  node scripts/create-business.js --name "$LOGIN_NAME" --email "$LOGIN_EMAIL" --password "local-preview" >/dev/null 2>&1
 fi
 
 # --- 5. Go -----------------------------------------------------------------
 echo ""
 echo "  ─────────────────────────────────────────"
 echo "    http://localhost:$PORT"
-echo "    Admin token:  $ADMIN"
+echo "    Login email:     $LOGIN_EMAIL"
+echo "    Login password:  local-preview"
 echo "  ─────────────────────────────────────────"
 echo ""
-echo "  The browser will open in a moment. Paste the token when it asks."
+echo "  The browser will open in a moment. Log in with the email/password above."
 echo "  Press Ctrl+C here to stop the server."
 echo ""
 

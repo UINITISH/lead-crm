@@ -17,6 +17,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import { insertLead, logIngest } from '../leads.js';
+import { getDefaultBusinessId } from '../auth.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
 
 /**
@@ -69,8 +70,10 @@ function verifyMetaSignature(req) {
 
 // --- webhook ----------------------------------------------------------------
 metaRouter.post('/meta/webhook', async (req, res) => {
+  const businessId = await getDefaultBusinessId();
+
   if (!verifyMetaSignature(req)) {
-    await logIngest({ source: 'meta', outcome: 'rejected', reason: 'bad X-Hub-Signature-256', http_status: 401, payload: req.body });
+    await logIngest(businessId, { source: 'meta', outcome: 'rejected', reason: 'bad X-Hub-Signature-256', http_status: 401, payload: req.body });
     return res.sendStatus(401);
   }
 
@@ -87,9 +90,9 @@ metaRouter.post('/meta/webhook', async (req, res) => {
   }
 
   for (const value of jobs) {
-    const job = processLeadgen(value).catch((err) => {
+    const job = processLeadgen(value, undefined, businessId).catch((err) => {
       console.error('[meta] processing failed:', err);
-      logIngest({ source: 'meta', outcome: 'error', reason: err.message, payload: value });
+      logIngest(businessId, { source: 'meta', outcome: 'error', reason: err.message, payload: value });
     });
     runInBackground(job);
   }
@@ -99,10 +102,12 @@ metaRouter.post('/meta/webhook', async (req, res) => {
  * Given a leadgen event, pull the full record from the Graph API and store it.
  * Exported so scripts/e2e.js can drive it with a stubbed fetcher.
  */
-export async function processLeadgen(value, fetchLead = fetchLeadFromGraph) {
+export async function processLeadgen(value, fetchLead = fetchLeadFromGraph, businessId = null) {
+  if (!businessId) businessId = await getDefaultBusinessId();
+
   const leadgenId = value?.leadgen_id;
   if (!leadgenId) {
-    await logIngest({ source: 'meta', outcome: 'rejected', reason: 'no leadgen_id', payload: value });
+    await logIngest(businessId, { source: 'meta', outcome: 'rejected', reason: 'no leadgen_id', payload: value });
     return null;
   }
 
@@ -111,11 +116,11 @@ export async function processLeadgen(value, fetchLead = fetchLeadFromGraph) {
 
   const phone_e164 = normalizePhone(fields.phone_number ?? fields.phone ?? fields.mobile_number);
   if (!phone_e164) {
-    await logIngest({ source: 'meta', outcome: 'rejected', reason: 'invalid/absent phone', payload: detail });
+    await logIngest(businessId, { source: 'meta', outcome: 'rejected', reason: 'invalid/absent phone', payload: detail });
     return null;
   }
 
-  const { lead, outcome } = await insertLead({
+  const { lead, outcome } = await insertLead(businessId, {
     full_name:    cleanText(fields.full_name ?? [fields.first_name, fields.last_name].filter(Boolean).join(' '), 200),
     phone_raw:    cleanText(fields.phone_number ?? fields.phone ?? fields.mobile_number, 50),
     phone_e164,
@@ -144,7 +149,7 @@ export async function processLeadgen(value, fetchLead = fetchLeadFromGraph) {
     submitted_at: detail.created_time || new Date().toISOString(),
   });
 
-  await logIngest({ source: 'meta', outcome, lead_id: lead.id, payload: detail });
+  await logIngest(businessId, { source: 'meta', outcome, lead_id: lead.id, payload: detail });
   return lead;
 }
 

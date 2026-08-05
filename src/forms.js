@@ -100,29 +100,38 @@ export async function backfillPhoneField() {
   }
 }
 
-/** All forms, each annotated with how many real (non-duplicate) leads it has produced. */
-export async function listForms() {
+/** All forms for this business, each annotated with how many real (non-duplicate) leads it has produced. */
+export async function listForms(businessId) {
   const res = await query(
     `SELECT f.*,
             COUNT(l.id) FILTER (WHERE l.is_duplicate = FALSE)::int AS submission_count
        FROM lead_forms f
-       LEFT JOIN leads l ON l.form_id = f.public_id AND l.source = 'website'
+       LEFT JOIN leads l ON l.form_id = f.public_id AND l.source = 'website' AND l.business_id = f.business_id
+      WHERE f.business_id = $1
       GROUP BY f.id
       ORDER BY f.created_at DESC`,
+    [businessId],
   );
   return res.rows;
 }
 
-export async function getForm(id) {
-  return one(`SELECT * FROM lead_forms WHERE id = $1`, [id]);
+export async function getForm(businessId, id) {
+  return one(`SELECT * FROM lead_forms WHERE id = $1 AND business_id = $2`, [id, businessId]);
 }
 
-/** Only returns active forms — an inactive form's public page shows a "no longer accepting" message instead. */
+/**
+ * Only returns active forms — an inactive form's public page shows a "no
+ * longer accepting" message instead. NOT scoped to a businessId — this is
+ * the one lookup a signed-out visitor hits (GET /f/:public_id), and its
+ * whole job is to tell the caller WHICH business this public_id belongs to.
+ * public_id is an unguessable random token, so this is the same trust model
+ * as a password-reset link, not an authorization bypass.
+ */
 export async function getFormByPublicId(publicId) {
   return one(`SELECT * FROM lead_forms WHERE public_id = $1`, [publicId]);
 }
 
-export async function createForm({ name, fields, developer_name = null, created_by = null }) {
+export async function createForm(businessId, { name, fields, developer_name = null, created_by = null }) {
   let publicId = genPublicId();
   for (let i = 0; i < 5; i++) {
     const clash = await one(`SELECT id FROM lead_forms WHERE public_id = $1`, [publicId]);
@@ -134,26 +143,26 @@ export async function createForm({ name, fields, developer_name = null, created_
   // and wants a phone-only form, which is a valid choice, not an omission.
   const cleanFields = sanitizeFields(fields !== undefined ? fields : defaultFields());
   const res = await query(
-    `INSERT INTO lead_forms (public_id, name, fields, developer_name, created_by)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [publicId, name, JSON.stringify(cleanFields), developer_name || null, created_by],
+    `INSERT INTO lead_forms (business_id, public_id, name, fields, developer_name, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [businessId, publicId, name, JSON.stringify(cleanFields), developer_name || null, created_by],
   );
   return res.rows[0];
 }
 
-export async function updateForm(id, { name, fields, developer_name, is_active } = {}) {
+export async function updateForm(businessId, id, { name, fields, developer_name, is_active } = {}) {
   const sets = [];
-  const params = [id];
+  const params = [id, businessId];
   if (name !== undefined) { params.push(name); sets.push(`name = $${params.length}`); }
   if (fields !== undefined) { params.push(JSON.stringify(sanitizeFields(fields))); sets.push(`fields = $${params.length}`); }
   if (developer_name !== undefined) { params.push(developer_name); sets.push(`developer_name = $${params.length}`); }
   if (is_active !== undefined) { params.push(is_active); sets.push(`is_active = $${params.length}`); }
-  if (!sets.length) return getForm(id);
-  const res = await query(`UPDATE lead_forms SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, params);
+  if (!sets.length) return getForm(businessId, id);
+  const res = await query(`UPDATE lead_forms SET ${sets.join(', ')} WHERE id = $1 AND business_id = $2 RETURNING *`, params);
   return res.rows[0] || null;
 }
 
-export async function deleteForm(id) {
-  const res = await query(`DELETE FROM lead_forms WHERE id = $1 RETURNING id`, [id]);
+export async function deleteForm(businessId, id) {
+  const res = await query(`DELETE FROM lead_forms WHERE id = $1 AND business_id = $2 RETURNING id`, [id, businessId]);
   return res.rows.length > 0;
 }

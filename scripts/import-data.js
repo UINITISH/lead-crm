@@ -19,7 +19,15 @@ if (!jsonPath || !targetUrl) {
 }
 
 const data = JSON.parse(await readFile(jsonPath, 'utf8'));
-const pool = new pg.Pool({ connectionString: targetUrl, max: 5 });
+
+// Same reasoning as src/db.js: managed Postgres (Render etc.) requires SSL on
+// external connections, and a bare local URL is the only case that skips it.
+const isLocal = /localhost|127\.0\.0\.1/.test(targetUrl);
+const pool = new pg.Pool({
+  connectionString: targetUrl,
+  ssl: isLocal ? false : { rejectUnauthorized: false },
+  max: 5,
+});
 
 // Parent-before-child order — matters because of foreign keys.
 const TABLES = [
