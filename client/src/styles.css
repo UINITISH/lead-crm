@@ -176,3 +176,29 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--
 .login-card { background:#fff; border-radius:16px; box-shadow:0 30px 80px rgba(15,23,42,.20);
   padding:38px 34px; width:100%; max-width:392px; }
 @media (max-width:640px) { .login-card-zone { padding:0 20px; justify-content:center; } .login-card { max-width:400px; } }
+
+/* New-lead notifications — sidebar bell + dropdown, and the toast stack. */
+.lead-notif-wrap { position:relative; }
+.lead-notif-bell { position:relative; padding:5px 6px; border:none; background:none; color:var(--muted); border-radius:6px; }
+.lead-notif-bell:hover { background:#eef0f3; color:var(--text); }
+.lead-notif-badge { position:absolute; top:-2px; right:-2px; background:var(--bad); color:#fff;
+  font-size:9.5px; font-weight:700; line-height:1; min-width:15px; height:15px; border-radius:99px;
+  display:flex; align-items:center; justify-content:center; padding:0 3px; }
+.lead-notif-panel { left:0; right:auto; top:calc(100% + 8px); min-width:280px; max-width:320px; max-height:360px; overflow-y:auto; }
+.lead-notif-panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:9px 12px; font-size:12px; font-weight:600; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--panel); }
+.lead-notif-enable { font-size:11px; font-weight:500; padding:3px 8px; border-radius:6px; }
+.lead-notif-item { display:flex; align-items:center; gap:8px; width:100%; padding:9px 12px;
+  border:none; background:none; text-align:left; border-radius:0; border-bottom:1px solid var(--line); }
+.lead-notif-item:last-child { border-bottom:none; }
+.lead-notif-item:hover { background:#f5f6f8; }
+.lead-notif-item-name { flex:1; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lead-notif-item-time { font-size:10.5px; flex-shrink:0; }
+
+.lead-toast-stack { position:fixed; top:18px; right:18px; z-index:200; display:flex; flex-direction:column; gap:10px; }
+.lead-toast { display:flex; align-items:flex-start; gap:10px; background:var(--panel); border:1px solid var(--line);
+  border-radius:10px; box-shadow:0 12px 32px rgba(20,24,34,.18); padding:12px 14px; width:280px; cursor:pointer;
+  color:var(--accent); animation:lead-toast-in .18s ease-out; }
+.lead-toast-title { font-size:12.5px; font-weight:700; color:var(--text); }
+.lead-toast-body { font-size:12px; color:var(--muted); margin-top:2px; }
+@keyframes lead-toast-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }

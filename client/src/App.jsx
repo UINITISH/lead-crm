@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Icon from './components/Icon.jsx';
+import LeadNotifications from './components/LeadNotifications.jsx';
 import AddLeadModal from './components/AddLeadModal.jsx';
 import EditLeadModal from './components/EditLeadModal.jsx';
 import LeadActionsMenu from './components/LeadActionsMenu.jsx';
@@ -139,8 +140,9 @@ function Dashboard({ onLogout }) {
   return (
     <>
       <div className="sidebar">
-        <div className="brand">
+        <div className="brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p className="name">{companyName}</p>
+          <LeadNotifications onOpenLead={(lead) => { setPage('leads'); load(); open(lead.id); }} />
         </div>
         {NAV.map(n => (
           <button key={n.key} className={'nav-item' + (page === n.key ? ' active' : '')}
