@@ -14,3 +14,5 @@ public_build_check/
 
 # Real lead/business data exported for migration — never belongs in git.
 export.json
+.vercel
+.env*
