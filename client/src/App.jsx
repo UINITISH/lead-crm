@@ -100,6 +100,11 @@ function Dashboard({ onLogout }) {
     setSelected(r.lead);
     setSelectedFollowups(fr.followups || []);
     setSelectedDeals(dr.deals || []);
+    // Fetching a lead marks it viewed server-side (see getLead in
+    // src/leads.js) — patch it into the local list right away so the bold
+    // "unviewed" row un-bolds the instant it's opened, instead of only after
+    // the next full reload.
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, viewed_at: r.lead.viewed_at } : l)));
   }
 
   async function setStatus(id, status) {

@@ -35,6 +35,10 @@ th { color:var(--muted); font-weight:600; font-size:11px; text-transform:upperca
      background:#fafbfc; }
 tr:last-child td { border-bottom:none; }
 tbody tr:hover { background:#f7f9fc; cursor:pointer; }
+/* A lead nobody has opened yet — bold, same idea as an unread email, until
+   someone clicks in and the drawer marks it viewed (see leads.viewed_at). */
+tr.lead-unviewed td { font-weight:700; }
+.lead-unviewed.card { border-left:3px solid var(--accent); }
 input,select,button,textarea { background:#fff; color:var(--text); border:1px solid var(--line);
                       border-radius:7px; padding:8px 10px; font-size:13px; font-family:inherit; }
 button { cursor:pointer; }

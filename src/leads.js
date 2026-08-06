@@ -236,7 +236,17 @@ export async function listLeads(businessId, filters = {}) {
 }
 
 export async function getLead(businessId, id) {
-  const lead = await one(`SELECT * FROM leads WHERE id = $1 AND business_id = $2`, [id, businessId]);
+  // Marks the lead "viewed" the first time anyone opens it — COALESCE means
+  // a second, third, ... open() never overwrites the original viewed_at.
+  // This is what un-bolds a lead in the Leads table (see leads.viewed_at in
+  // db/schema.sql): nobody has to click a separate "mark as read" button,
+  // opening the drawer at all is the signal that someone looked at it.
+  const lead = await one(
+    `UPDATE leads SET viewed_at = COALESCE(viewed_at, now())
+       WHERE id = $1 AND business_id = $2
+     RETURNING *`,
+    [id, businessId],
+  );
   if (!lead) return null;
   const events = await query(
     `SELECT * FROM lead_events WHERE lead_id = $1 ORDER BY created_at ASC`, [id],

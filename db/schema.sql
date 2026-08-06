@@ -577,6 +577,16 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS deal_documents_deal_idx ON deal_documents (deal_id);
 
 -- ---------------------------------------------------------------------------
+-- leads.viewed_at — NULL until someone opens the lead's detail drawer once
+-- (set the moment getLead() is called, see src/leads.js). Drives the
+-- "unread"-style bold row in the Leads table for any lead nobody has looked
+-- at yet, same idea as an inbox: bold until opened, then stays normal weight
+-- forever after, even if it's re-opened later.
+-- ---------------------------------------------------------------------------
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS leads_viewed_idx ON leads (viewed_at);
+
+-- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$
