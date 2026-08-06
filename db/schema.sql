@@ -45,6 +45,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS businesses_email_uniq ON businesses (LOWER(ema
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS slug TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS businesses_slug_uniq ON businesses (slug) WHERE slug IS NOT NULL;
 
+-- A business can be reached by more than one login (owner + a colleague, or
+-- two email addresses for the same team) — every row here is a full set of
+-- credentials, but they all resolve to the SAME business_id, so whoever logs
+-- in with any of them sees the exact same leads/data. The original single
+-- email+password on `businesses` still works untouched (kept for backward
+-- compatibility and as the "primary" contact); this table is only consulted
+-- for logins that were added on top of it via scripts/add-login.js.
+CREATE TABLE IF NOT EXISTS business_logins (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id    UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  email          TEXT NOT NULL,
+  password_hash  TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS business_logins_email_uniq ON business_logins (LOWER(email));
+
 -- ---------------------------------------------------------------------------
 -- projects
 -- ---------------------------------------------------------------------------

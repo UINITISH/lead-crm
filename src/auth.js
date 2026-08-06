@@ -132,12 +132,29 @@ export async function getBusiness(id) {
   return one(`SELECT * FROM businesses WHERE id = $1`, [id]);
 }
 
-/** Returns the business row (password excluded) on success, null on bad credentials. */
+/**
+ * Returns the business row (password excluded) on success, null on bad
+ * credentials. Checks the business's own primary email+password first, then
+ * falls back to business_logins — an extra login added on top of an
+ * existing business via scripts/add-login.js, which resolves to the exact
+ * same business_id and therefore the exact same leads/data. Whoever logs in
+ * with either credential ends up looking at one shared account, on purpose.
+ */
 export async function authenticateBusiness(email, password) {
   const business = await findBusinessByEmail(email);
-  if (!business || !business.is_active || !business.password_hash) return null;
-  if (!verifyPassword(password, business.password_hash)) return null;
-  const { password_hash, ...safe } = business;
+  if (business && business.is_active && business.password_hash && verifyPassword(password, business.password_hash)) {
+    const { password_hash, ...safe } = business;
+    return safe;
+  }
+
+  const login = await one(
+    `SELECT bl.password_hash AS login_password_hash, b.*
+       FROM business_logins bl JOIN businesses b ON b.id = bl.business_id
+      WHERE LOWER(bl.email) = LOWER($1)`,
+    [email],
+  );
+  if (!login || !login.is_active || !verifyPassword(password, login.login_password_hash)) return null;
+  const { password_hash, login_password_hash, ...safe } = login;
   return safe;
 }
 
@@ -172,4 +189,26 @@ export async function upsertBusiness({ name, email, password }) {
     [name, email, password_hash, slug],
   );
   return { business: res.rows[0], created: true };
+}
+
+/**
+ * Used by scripts/add-login.js — adds another email+password that resolves
+ * to an EXISTING business's data, rather than creating a new isolated
+ * tenant. Re-running with the same email updates that login's password
+ * instead of erroring (findBusinessByEmail is checked too, so this can't
+ * silently shadow the business's own primary login).
+ */
+export async function addLoginToBusiness({ businessId, email, password }) {
+  const clash = await findBusinessByEmail(email);
+  if (clash && clash.id !== businessId) {
+    throw new Error(`${email} is already the primary login for a different business ("${clash.name}").`);
+  }
+  const password_hash = hashPassword(password);
+  const res = await query(
+    `INSERT INTO business_logins (business_id, email, password_hash) VALUES ($1, $2, $3)
+       ON CONFLICT (LOWER(email)) DO UPDATE SET password_hash = EXCLUDED.password_hash, business_id = EXCLUDED.business_id
+     RETURNING id, business_id, email, created_at`,
+    [businessId, email, password_hash],
+  );
+  return res.rows[0];
 }
