@@ -207,4 +207,5 @@ h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--
 .pagination { display:flex; align-items:center; gap:6px; margin-top:18px; flex-wrap:wrap; }
 .pagination button { padding:6px 11px; font-size:12.5px; min-width:34px; }
 .pagination button:disabled { opacity:.4; cursor:default; }
+input:disabled,select:disabled { background:#f5f6f8; color:var(--muted); cursor:not-allowed; }
 .pagination-gap { padding:0 4px; color:var(--muted); font-size:12.5px; }

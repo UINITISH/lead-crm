@@ -110,7 +110,7 @@ export default function EditLeadModal({ lead, actingAs, onClose, onSaved }) {
           </div>
           <div className="field">
             <label>Source</label>
-            <select value={form.source} onChange={set('source')}>
+            <select value={form.source} disabled title="Source is set when the lead comes in and can't be changed">
               <option value="meta">Meta (Facebook/Instagram)</option>
               <option value="google">Google</option>
               <option value="website">Website</option>
