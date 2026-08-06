@@ -7,7 +7,10 @@
  *
  * This does two things:
  *   1. Adds "Truaquapolis" to the developers directory (so it's selectable
- *      going forward, alongside Prestige/Sobha/etc.).
+ *      going forward, alongside Prestige/Sobha/etc.), with a project of the
+ *      same name under it — so the Project dropdown that appears once you
+ *      pick a single known developer on the Add Lead form isn't empty; it
+ *      offers "Truaquapolis" immediately instead of "+ Add new project…".
  *   2. Relabels every existing lead whose developer_name contains the bare
  *      token "tru" (comma-separated, case-insensitive, whole-token match —
  *      won't touch something like "Truform" or "Structura") to
@@ -19,7 +22,7 @@
  */
 import 'dotenv/config';
 import { initDb, query, closeDb } from '../src/db.js';
-import { findOrCreateDeveloper } from '../src/developers.js';
+import { findOrCreateDeveloper, findOrCreateProject } from '../src/developers.js';
 
 const confirm = process.argv.includes('--confirm');
 const OLD = 'tru';
@@ -53,6 +56,8 @@ if (!confirm) {
 
 const dev = await findOrCreateDeveloper(NEW, null);
 console.log(`\nDeveloper row: "${dev.name}" (id ${dev.id})`);
+const project = await findOrCreateProject(NEW, dev.id);
+console.log(`Project row: "${project.name}" under "${dev.name}" (id ${project.id})`);
 
 for (const f of toFix) {
   await query(`UPDATE leads SET developer_name = $1 WHERE id = $2`, [f.to, f.id]);
