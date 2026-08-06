@@ -6,7 +6,7 @@ import 'dotenv/config';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { initDb, exec, query, closeDb } from './db.js';
+import { initDb, exec, query, closeDb, getDbKind } from './db.js';
 import { seedDeveloperDirectory } from './developers.js';
 import { seedDefaultTags } from './tags.js';
 import { backfillPhoneField } from './forms.js';
@@ -66,7 +66,27 @@ async function ensureDefaultBusinessAndBackfill() {
 export async function migrate() {
   await initDb();
   const sql = await readFile(path.join(here, '..', 'db', 'schema.sql'), 'utf8');
-  await exec(sql);
+
+  // Vercel spins up multiple serverless instances for concurrent traffic, and
+  // each one runs migrate() on cold start. If two of them execute this same
+  // DDL script at the same instant, Postgres can deadlock them against each
+  // other fighting over AccessExclusiveLock on the same relation (seen in
+  // production as error 40P01). An advisory lock fixes it: the whole
+  // multi-statement script below runs as one implicit transaction (Postgres'
+  // simple query protocol wraps a semicolon-separated batch in a single
+  // transaction unless it contains its own BEGIN/COMMIT), so acquiring
+  // pg_advisory_xact_lock as the very first statement holds it for exactly
+  // the life of that transaction and auto-releases on commit or rollback —
+  // no unlock call, no way to leave it stuck. One cold start applies the
+  // schema while every other one waits; once it commits, the rest run the
+  // same IF NOT EXISTS / IF EXISTS statements against an already-migrated
+  // schema and finish instantly. PGlite is single-process (local dev/CI), so
+  // it can't deadlock with itself — skip the lock there.
+  const kind = await getDbKind();
+  const script = kind === 'postgres'
+    ? `SELECT pg_advisory_xact_lock(727476301);\n${sql}`
+    : sql;
+  await exec(script);
   console.log('[migrate] schema applied');
   // Reference data, not demo data — unlike scripts/seed.js this always runs
   // so the manual lead entry form has a developer/project list out of the box.
