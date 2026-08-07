@@ -39,7 +39,7 @@ import {
   createTicket, listTickets, getTicket, updateTicket, deleteTicket, ticketStats,
 } from '../tickets.js';
 import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
-import { authenticateBusiness, issueSessionToken, verifySessionToken, findBusinessBySlug } from '../auth.js';
+import { authenticateBusiness, issueSessionToken, verifySessionToken, findBusinessBySlug, getEffectiveHiddenPages } from '../auth.js';
 
 const toNum = (v) => {
   if (v === undefined || v === null || v === '') return null;
@@ -67,7 +67,7 @@ adminRouter.post('/auth/login', async (req, res) => {
   if (slug && business.slug !== slug) {
     return res.status(401).json({ ok: false, error: 'This login link belongs to a different account' });
   }
-  const token = issueSessionToken(business);
+  const token = issueSessionToken(business, business.login_id ?? null);
   res.json({
     ok: true,
     token,
@@ -88,12 +88,15 @@ adminRouter.use(async (req, res, next) => {
   const session = verifySessionToken(given);
   if (!session) return res.status(401).json({ ok: false, error: 'Unauthorized' });
   req.business_id = session.business_id;
+  req.login_id = session.login_id || null;
   // Re-checked on every request (rather than baked into the token) so a
   // restriction set via scripts/set-hidden-pages.js takes effect immediately
-  // for anyone already logged in, not just on their next login.
+  // for anyone already logged in, not just on their next login. Scoped to
+  // exactly which login this session was issued for, so restricting one
+  // added login (business_logins) never affects the business's own primary
+  // login, which shares the same underlying leads/data.
   try {
-    const r = await raw(`SELECT hidden_pages FROM businesses WHERE id = $1`, [req.business_id]);
-    req.hidden_pages = r.rows[0]?.hidden_pages || [];
+    req.hidden_pages = await getEffectiveHiddenPages(req.business_id, req.login_id);
   } catch {
     req.hidden_pages = [];
   }

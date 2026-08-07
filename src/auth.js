@@ -62,13 +62,20 @@ function sign(payloadB64) {
   return crypto.createHmac('sha256', getSessionSecret()).update(payloadB64).digest('base64url');
 }
 
-export function issueSessionToken(business) {
-  const payload = { business_id: business.id, exp: Date.now() + SESSION_TTL_MS };
+/**
+ * loginId is null when this session was issued for the business's own
+ * primary email, or a business_logins.id when it was issued for an added
+ * login — carried through so every later request on this session can look
+ * up that SPECIFIC login's own restrictions (see getEffectiveHiddenPages),
+ * not just the business-wide ones.
+ */
+export function issueSessionToken(business, loginId = null) {
+  const payload = { business_id: business.id, login_id: loginId, exp: Date.now() + SESSION_TTL_MS };
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${payloadB64}.${sign(payloadB64)}`;
 }
 
-/** Returns { business_id } if the token is validly signed and unexpired, else null. */
+/** Returns { business_id, login_id } if the token is validly signed and unexpired, else null. */
 export function verifySessionToken(token) {
   if (!token || typeof token !== 'string' || !token.includes('.')) return null;
   const [payloadB64, sig] = token.split('.');
@@ -83,7 +90,7 @@ export function verifySessionToken(token) {
     return null;
   }
   if (!payload.business_id || !payload.exp || Date.now() > payload.exp) return null;
-  return { business_id: payload.business_id };
+  return { business_id: payload.business_id, login_id: payload.login_id || null };
 }
 
 // --- business accounts -----------------------------------------------------
@@ -133,29 +140,70 @@ export async function getBusiness(id) {
 }
 
 /**
+ * Resolves an email to which record actually owns it — the business's own
+ * primary login (loginId: null), or a specific business_logins row
+ * (loginId: that row's id) — without checking a password. Shared by
+ * authenticateBusiness and the hidden_pages-restriction tooling, which both
+ * need to know WHICH login this is, not just which business_id it resolves
+ * to, since restrictions can now be scoped to one specific login.
+ */
+async function resolveLogin(email) {
+  const business = await findBusinessByEmail(email);
+  if (business) {
+    return { business, loginId: null, passwordHash: business.password_hash, loginHiddenPages: [] };
+  }
+  const row = await one(
+    `SELECT bl.id AS login_id, bl.password_hash AS login_password_hash, bl.hidden_pages AS login_hidden_pages, b.*
+       FROM business_logins bl JOIN businesses b ON b.id = bl.business_id
+      WHERE LOWER(bl.email) = LOWER($1)`,
+    [email],
+  );
+  if (!row) return null;
+  const { login_id, login_password_hash, login_hidden_pages, ...business2 } = row;
+  return { business: business2, loginId: login_id, passwordHash: login_password_hash, loginHiddenPages: login_hidden_pages || [] };
+}
+
+/**
+ * Union of what's hidden for the whole business and what's hidden for one
+ * specific login — the business-wide list always applies to everyone, and a
+ * specific login can have MORE hidden on top of that (but never less; there's
+ * no way for a login to see a page the business itself has hidden).
+ */
+function mergeHiddenPages(businessHiddenPages, loginHiddenPages) {
+  return [...new Set([...(businessHiddenPages || []), ...(loginHiddenPages || [])])];
+}
+
+/**
  * Returns the business row (password excluded) on success, null on bad
  * credentials. Checks the business's own primary email+password first, then
  * falls back to business_logins — an extra login added on top of an
  * existing business via scripts/add-login.js, which resolves to the exact
  * same business_id and therefore the exact same leads/data. Whoever logs in
- * with either credential ends up looking at one shared account, on purpose.
+ * with either credential ends up looking at one shared account's data, on
+ * purpose — but hidden_pages can still differ per login (see
+ * mergeHiddenPages), so a colleague's login can be restricted without
+ * touching the business owner's own primary login.
  */
 export async function authenticateBusiness(email, password) {
-  const business = await findBusinessByEmail(email);
-  if (business && business.is_active && business.password_hash && verifyPassword(password, business.password_hash)) {
-    const { password_hash, ...safe } = business;
-    return safe;
-  }
+  const resolved = await resolveLogin(email);
+  if (!resolved) return null;
+  const { business, loginId, passwordHash, loginHiddenPages } = resolved;
+  if (!business.is_active || !passwordHash || !verifyPassword(password, passwordHash)) return null;
+  const { password_hash, hidden_pages, ...safe } = business;
+  return { ...safe, login_id: loginId, hidden_pages: mergeHiddenPages(hidden_pages, loginHiddenPages) };
+}
 
-  const login = await one(
-    `SELECT bl.password_hash AS login_password_hash, b.*
-       FROM business_logins bl JOIN businesses b ON b.id = bl.business_id
-      WHERE LOWER(bl.email) = LOWER($1)`,
-    [email],
-  );
-  if (!login || !login.is_active || !verifyPassword(password, login.login_password_hash)) return null;
-  const { password_hash, login_password_hash, ...safe } = login;
-  return safe;
+/**
+ * Re-checked on every request (see the session middleware in
+ * src/routes/admin.js) rather than baked into the token, so a restriction
+ * set via scripts/set-hidden-pages.js takes effect immediately for anyone
+ * already logged in, not just on their next login.
+ */
+export async function getEffectiveHiddenPages(businessId, loginId) {
+  const biz = await one(`SELECT hidden_pages FROM businesses WHERE id = $1`, [businessId]);
+  if (!loginId) return biz?.hidden_pages || [];
+  const login = await one(`SELECT hidden_pages FROM business_logins WHERE id = $1`, [loginId]);
+  return mergeHiddenPages(biz?.hidden_pages, login?.hidden_pages);
 }
 
 /**
@@ -192,32 +240,44 @@ export async function upsertBusiness({ name, email, password }) {
 }
 
 /**
- * Resolves an email to a business_id whether it's a business's own primary
- * login or one added on top via business_logins — same fallback order as
- * authenticateBusiness, just without the password check. Used by
- * scripts/set-hidden-pages.js, which needs to find the business but has no
- * password to verify.
+ * Resolves an email to { business, loginId } without checking a password —
+ * loginId is null for a business's own primary login, or a
+ * business_logins.id for one added on top via scripts/add-login.js. Used by
+ * scripts/set-hidden-pages.js to figure out whether restricting a given
+ * email should touch the whole business (and every login that shares it) or
+ * just that one specific added login.
  */
-export async function findBusinessByAnyEmail(email) {
-  const primary = await findBusinessByEmail(email);
-  if (primary) return primary;
-  const login = await one(
-    `SELECT b.* FROM business_logins bl JOIN businesses b ON b.id = bl.business_id WHERE LOWER(bl.email) = LOWER($1)`,
-    [email],
-  );
-  return login || null;
+export async function findLoginByEmail(email) {
+  const resolved = await resolveLogin(email);
+  if (!resolved) return null;
+  return { business: resolved.business, loginId: resolved.loginId };
 }
 
 /**
  * Sets which page keys (NAV keys in client/src/constants.js — 'settings',
- * 'forms', 'ingest', etc.) a business's login(s) should NOT be able to see
- * or reach. Applies to the whole business, so it covers every login that
- * resolves to that business_id (primary email + any business_logins rows).
+ * 'forms', 'ingest', etc.) are hidden BUSINESS-WIDE — every login that
+ * resolves to this business_id (primary email + any business_logins rows)
+ * inherits this, on top of whatever's set for their own specific login (see
+ * setLoginHiddenPages). Call this for the business's own primary email.
  */
 export async function setHiddenPages(businessId, pages) {
   const res = await query(
     `UPDATE businesses SET hidden_pages = $1 WHERE id = $2 RETURNING id, name, email, slug, hidden_pages`,
     [pages, businessId],
+  );
+  return res.rows[0] || null;
+}
+
+/**
+ * Sets which page keys are hidden for ONE SPECIFIC added login, without
+ * touching the business itself or any other login that shares its data.
+ * Call this for an email that resolved to a business_logins.id (not the
+ * business's own primary email).
+ */
+export async function setLoginHiddenPages(loginId, pages) {
+  const res = await query(
+    `UPDATE business_logins SET hidden_pages = $1 WHERE id = $2 RETURNING id, business_id, email, hidden_pages`,
+    [pages, loginId],
   );
   return res.rows[0] || null;
 }

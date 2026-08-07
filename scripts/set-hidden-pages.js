@@ -1,23 +1,34 @@
 /**
- * Restricts (or un-restricts) which pages a client business's login(s) can
- * see and reach — both the sidebar nav item and the underlying API routes
- * that exclusively belong to that page (see blockIfHidden in
- * src/routes/admin.js). Applies to the whole business, so it covers every
- * login that resolves to it (primary email + any scripts/add-login.js extras).
+ * Restricts (or un-restricts) which pages a login can see and reach — both
+ * the sidebar nav item and the underlying API routes that exclusively
+ * belong to that page (see blockIfHidden in src/routes/admin.js).
+ *
+ * IMPORTANT: a business can be reached by more than one login — its own
+ * primary email, plus any extra ones added via scripts/add-login.js, all of
+ * which resolve to the exact same business_id and see the exact same
+ * leads/data. This script restricts based on WHICH EMAIL you pass:
+ *   - The business's own primary email  -> restriction applies business-wide,
+ *     i.e. to every login that shares this business's data.
+ *   - An added login's email            -> restriction applies to ONLY that
+ *     one login; the business's primary login (and any other added logins)
+ *     are completely unaffected.
+ * Whichever you target, the OTHER list still applies on top — a login always
+ * sees business-wide restrictions plus whatever's set specifically on it.
  *
  * Valid page keys: leads, tickets, forms, ingest, settings, help
  * ('dashboard' isn't hideable — it's the fallback landing page.)
  *
  * Usage:
- *   node scripts/set-hidden-pages.js --email owner@client.com --hide settings,forms,ingest --confirm
- *   node scripts/set-hidden-pages.js --email owner@client.com --hide none --confirm   (clears all restrictions)
+ *   node scripts/set-hidden-pages.js --email colleague@client.com --hide settings,forms,ingest --confirm
+ *   node scripts/set-hidden-pages.js --email colleague@client.com --hide none --confirm   (clears that login's own restrictions)
  *
- * Re-running replaces the full restriction list — it doesn't add to whatever
- * was set before, so always pass the complete set you want hidden.
+ * Re-running replaces the full restriction list for whichever login/business
+ * you targeted — it doesn't add to what was set before, so always pass the
+ * complete set you want hidden for that target.
  */
 import 'dotenv/config';
 import { initDb, closeDb } from '../src/db.js';
-import { findBusinessByAnyEmail, setHiddenPages } from '../src/auth.js';
+import { findLoginByEmail, setHiddenPages, setLoginHiddenPages } from '../src/auth.js';
 
 const HIDEABLE_PAGES = ['leads', 'tickets', 'forms', 'ingest', 'settings', 'help'];
 
@@ -34,8 +45,8 @@ function parseArgs(argv) {
 
 const { email, hide, confirm } = parseArgs(process.argv.slice(2));
 if (!email || hide === undefined) {
-  console.error('Usage: node scripts/set-hidden-pages.js --email owner@client.com --hide settings,forms,ingest --confirm');
-  console.error(`       (--hide none clears all restrictions; valid keys: ${HIDEABLE_PAGES.join(', ')})`);
+  console.error('Usage: node scripts/set-hidden-pages.js --email colleague@client.com --hide settings,forms,ingest --confirm');
+  console.error(`       (--hide none clears that login's own restrictions; valid keys: ${HIDEABLE_PAGES.join(', ')})`);
   process.exit(1);
 }
 
@@ -48,24 +59,35 @@ if (bad.length) {
 
 await initDb();
 
-const business = await findBusinessByAnyEmail(email);
-if (!business) {
-  console.error(`No business found for login "${email}"`);
+const found = await findLoginByEmail(email);
+if (!found) {
+  console.error(`No login found for "${email}"`);
   await closeDb();
   process.exit(1);
 }
+const { business, loginId } = found;
 
-console.log(`\n"${business.name}" (${business.email}):`);
-console.log(`  currently hidden: ${business.hidden_pages?.length ? business.hidden_pages.join(', ') : '(none)'}`);
-console.log(`  will become:      ${pages.length ? pages.join(', ') : '(none — full access)'}`);
+if (loginId) {
+  console.log(`\n"${email}" is an ADDED login on "${business.name}" — this will restrict ONLY this login.`);
+  console.log(`The business's own primary login (${business.email}), and any other added logins, are unaffected.`);
+} else {
+  console.log(`\n"${email}" is the PRIMARY login for "${business.name}" — this restriction applies BUSINESS-WIDE,`);
+  console.log(`meaning every login that shares this business's data (including any added via add-login.js) inherits it.`);
+}
 
 if (!confirm) {
+  console.log(`\nWill hide: ${pages.length ? pages.join(', ') : '(none — full access)'}`);
   console.log(`\nDry run only — nothing written. Re-run with --confirm to apply.\n`);
   await closeDb();
   process.exit(0);
 }
 
-await setHiddenPages(business.id, pages);
+if (loginId) {
+  await setLoginHiddenPages(loginId, pages);
+} else {
+  await setHiddenPages(business.id, pages);
+}
+
 console.log(`\nDone. Anyone logged into this account will need to log out and back in to see the change immediately`);
 console.log(`(API access updates right away either way — the sidebar just needs a fresh login to re-fetch it).\n`);
 await closeDb();

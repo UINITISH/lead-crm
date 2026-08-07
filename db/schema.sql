@@ -67,6 +67,16 @@ CREATE TABLE IF NOT EXISTS business_logins (
   password_hash  TEXT NOT NULL,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Same idea as businesses.hidden_pages, but scoped to just THIS login rather
+-- than the whole business — so one added login (e.g. a client's own view
+-- into a business that's actually owned/run by someone else) can be
+-- restricted without touching the business's own primary login, which
+-- shares the same underlying data. The two lists are unioned at request
+-- time (see getEffectiveHiddenPages in src/auth.js): whatever's hidden for
+-- the business is hidden for every login too; this just adds more on top
+-- for one specific login.
+ALTER TABLE business_logins ADD COLUMN IF NOT EXISTS hidden_pages TEXT[] NOT NULL DEFAULT '{}';
 CREATE UNIQUE INDEX IF NOT EXISTS business_logins_email_uniq ON business_logins (LOWER(email));
 
 -- ---------------------------------------------------------------------------
