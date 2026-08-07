@@ -13,4 +13,4 @@ export const NAV = [
 
 export const DEAL_STAGES = ['negotiation', 'booked', 'closed_won', 'closed_lost'];
 export const DEAL_STAGE_LABELS = { negotiation: 'Negotiation', booked: 'Booked', closed_won: 'Closed won', closed_lost: 'Closed lost' };
-export const DEAL_ELIGIBLE_STATUSES = ['pickup', 'closed', 'not_interested'];
+export const DEAL_ELIGIBLE_STATUSES = ['closed'];

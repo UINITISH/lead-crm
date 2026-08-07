@@ -344,7 +344,7 @@ function Dashboard({ onLogout }) {
               <CreateDealQuickAdd leadId={selected.id} actingAs={actingAs} onCreated={() => open(selected.id)} />
             ) : (
               <div className="muted" style={{ fontSize: 12 }}>
-                A deal can be opened once this lead reaches negotiation.
+                A deal can be opened once this lead is closed.
               </div>
             )
           )}

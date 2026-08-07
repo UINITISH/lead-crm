@@ -217,8 +217,9 @@ export const HELP_TOPICS = [
     body: (
       <>
         <p>
-          A deal is a real, specific negotiation — distinct from a lead. It carries fields a lead never has: which
-          unit, the agreed price, and an expected closing date. Stages run{' '}
+          A deal is a real, specific negotiation — distinct from a lead. It only becomes available once a lead's
+          Status is <strong>Closed</strong>, and carries fields a lead never has: which unit, the agreed price, and
+          an expected closing date. Stages run{' '}
           <strong>Negotiation → Booked → Closed won / Closed lost.</strong>
         </p>
         <p>

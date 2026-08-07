@@ -282,12 +282,12 @@ adminRouter.patch('/followups/:id', async (req, res) => {
 });
 
 /**
- * Deals. Kept as an explicit allow-list (rather than always allowing it)
- * even though it currently includes every status — if the status list ever
- * grows again and some early stage genuinely shouldn't allow opening a deal
- * yet, this is the one place to change that.
+ * Deals. A deal only makes sense once a lead is actually Closed — showing
+ * the "Open deal" prompt on every Pickup/Not interested lead (which is what
+ * happens if every status is eligible) is just clutter on leads that were
+ * never going anywhere.
  */
-const DEAL_ELIGIBLE_STATUSES = ['pickup', 'closed', 'not_interested'];
+const DEAL_ELIGIBLE_STATUSES = ['closed'];
 
 adminRouter.get('/deals', async (req, res) => {
   res.json({ ok: true, deals: await listDeals(req.business_id, { stage: req.query.stage, limit: req.query.limit }) });
