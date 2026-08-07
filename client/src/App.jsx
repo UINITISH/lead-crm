@@ -4,9 +4,7 @@ import LeadNotifications from './components/LeadNotifications.jsx';
 import AddLeadModal from './components/AddLeadModal.jsx';
 import EditLeadModal from './components/EditLeadModal.jsx';
 import LeadActionsMenu from './components/LeadActionsMenu.jsx';
-import DealEditModal from './components/DealEditModal.jsx';
 import FollowUpQuickAdd from './components/FollowUpQuickAdd.jsx';
-import CreateDealQuickAdd from './components/CreateDealQuickAdd.jsx';
 import LeadsPage from './pages/LeadsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import DealsPage from './pages/DealsPage.jsx';
@@ -18,8 +16,8 @@ import SettingsPage from './pages/SettingsPage.jsx';
 import HelpPage from './pages/HelpPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import { api, isLoggedIn, logout, business } from './lib/api.js';
-import { fmt, fmtINR, tagColorClass } from './lib/format.js';
-import { STATUSES, NAV, DEAL_STAGE_LABELS, DEAL_ELIGIBLE_STATUSES } from './constants.js';
+import { fmt, tagColorClass } from './lib/format.js';
+import { STATUSES, NAV } from './constants.js';
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(isLoggedIn());
@@ -34,8 +32,6 @@ function Dashboard({ onLogout }) {
   const [filters, setFilters] = useState({ source: '', status: '', q: '' });
   const [selected, setSelected] = useState(null);
   const [selectedFollowups, setSelectedFollowups] = useState([]);
-  const [selectedDeals, setSelectedDeals] = useState([]);
-  const [editingDeal, setEditingDeal] = useState(null);
   const [editingLead, setEditingLead] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
@@ -94,12 +90,11 @@ function Dashboard({ onLogout }) {
   }
 
   async function open(id) {
-    const [r, fr, dr] = await Promise.all([
-      api('/leads/' + id), api('/leads/' + id + '/followups'), api('/leads/' + id + '/deals'),
+    const [r, fr] = await Promise.all([
+      api('/leads/' + id), api('/leads/' + id + '/followups'),
     ]);
     setSelected(r.lead);
     setSelectedFollowups(fr.followups || []);
-    setSelectedDeals(dr.deals || []);
     // Fetching a lead marks it viewed server-side (see getLead in
     // src/leads.js) — patch it into the local list right away so the bold
     // "unviewed" row un-bolds the instant it's opened, instead of only after
@@ -222,15 +217,6 @@ function Dashboard({ onLogout }) {
         />
       )}
 
-      {editingDeal && (
-        <DealEditModal
-          deal={editingDeal}
-          actingAs={actingAs}
-          onClose={() => setEditingDeal(null)}
-          onSaved={() => { setEditingDeal(null); if (selected) open(selected.id); }}
-        />
-      )}
-
       {selected && (
         <div className={'drawer' + (drawerOpen ? ' open' : '')} onClick={e => e.stopPropagation()}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -324,30 +310,6 @@ function Dashboard({ onLogout }) {
           ))}
           {!selectedFollowups.length && <div className="muted" style={{ fontSize: 12 }}>No follow-ups scheduled.</div>}
           <FollowUpQuickAdd leadId={selected.id} actingAs={actingAs} onAdded={() => open(selected.id)} />
-
-          <h2>Deal</h2>
-          {selectedDeals.map(d => (
-            <div className="list-row" key={d.id} style={{ cursor: 'pointer' }} onClick={() => setEditingDeal({ ...d, full_name: selected.full_name })}>
-              <div style={{ flex: 1 }}>
-                <span className={'pill deal-' + d.stage}>
-                  {DEAL_STAGE_LABELS[d.stage]}
-                </span>
-                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                  {d.unit_number || 'No unit set'} · {fmtINR(d.agreed_price)}
-                  {d.expected_closing_date ? ' · closing ' + new Date(d.expected_closing_date).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : ''}
-                </div>
-              </div>
-            </div>
-          ))}
-          {!selectedDeals.length && (
-            DEAL_ELIGIBLE_STATUSES.includes(selected.status) ? (
-              <CreateDealQuickAdd leadId={selected.id} actingAs={actingAs} onCreated={() => open(selected.id)} />
-            ) : (
-              <div className="muted" style={{ fontSize: 12 }}>
-                A deal can be opened once this lead is closed.
-              </div>
-            )
-          )}
 
           <h2>Attribution</h2>
           <dl className="kv">
