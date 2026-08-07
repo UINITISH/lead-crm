@@ -20,7 +20,7 @@ export const HELP_TOPICS = [
         <h3>Status</h3>
         <p>
           <strong>Pickup → Closed / Not interested.</strong> This is the pipeline stage. Every new lead starts at
-          Pickup; a Deal can be opened for it at any status.
+          Pickup.
         </p>
         <h3>Tag</h3>
         <p>
@@ -206,40 +206,6 @@ export const HELP_TOPICS = [
           The list/card toggle next to the filters switches the Leads page between the classic table and a card grid
           — same data, same inline Status/Tag editing, just easier to scan on a smaller screen. Your choice is
           remembered for next time.
-        </p>
-      </>
-    ),
-  },
-  {
-    id: 'deals',
-    title: 'Deals, and the Bookings tabs (applicants, cost sheet, payments, documents)',
-    keywords: 'deals negotiation booked closed won lost unit price closing date bookings applicants co-applicant cost sheet payment milestones documents kyc pan aadhaar',
-    body: (
-      <>
-        <p>
-          A deal is a real, specific negotiation — distinct from a lead. It only becomes available once a lead's
-          Status is <strong>Closed</strong>, and carries fields a lead never has: which unit, the agreed price, and
-          an expected closing date. Stages run{' '}
-          <strong>Negotiation → Booked → Closed won / Closed lost.</strong>
-        </p>
-        <p>
-          Opening a deal gives four more tabs alongside Overview:
-        </p>
-        <h3>Applicants</h3>
-        <p>Primary applicant and any co-applicants on the booking, with contact details.</p>
-        <h3>Cost sheet</h3>
-        <p>Itemized charges — base price, GST, registration, club membership, whatever applies — that add up to the deal's total cost.</p>
-        <h3>Payments</h3>
-        <p>
-          A schedule of milestones (booking amount, on agreement, on possession…), each with a due date and amount.
-          Marking one <strong>Paid</strong> records how much and when, and drops a note in the lead's Activity thread
-          automatically. The Deals page header shows how much has been Collected vs. is still Due across every deal.
-        </p>
-        <h3>Documents</h3>
-        <p>
-          A checklist (Pending / Received / Verified) for paperwork like PAN, sale agreement, loan sanction letter.
-          There's no file upload yet — the reference field is for a plain-text note on where the actual copy is
-          (e.g. "original with reception", "scanned copy emailed 12 Aug").
         </p>
       </>
     ),

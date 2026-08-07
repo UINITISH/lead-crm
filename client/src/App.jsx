@@ -7,7 +7,6 @@ import LeadActionsMenu from './components/LeadActionsMenu.jsx';
 import FollowUpQuickAdd from './components/FollowUpQuickAdd.jsx';
 import LeadsPage from './pages/LeadsPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import DealsPage from './pages/DealsPage.jsx';
 import TicketsPage from './pages/TicketsPage.jsx';
 import DevelopersPage from './pages/DevelopersPage.jsx';
 import FormsPage from './pages/FormsPage.jsx';
@@ -192,7 +191,6 @@ function Dashboard({ onLogout }) {
                      onSetStatus={setStatus} onSetTag={setTag} />
         )}
         {page === 'dashboard' && <DashboardPage leads={leads} report={report} load={load} actingAs={actingAs} />}
-        {page === 'deals' && <DealsPage actingAs={actingAs} />}
         {page === 'tickets' && <TicketsPage reps={reps} actingAs={actingAs} />}
         {page === 'developers' && <DevelopersPage />}
         {page === 'forms' && <FormsPage />}
