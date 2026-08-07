@@ -33,7 +33,9 @@ function StatusTagSelects({ l, tags, onSetStatus, onSetTag }) {
 
 export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, setShowAdd, onEditLead, onDeleteLead, tags = [], reps = [], onSetStatus, onSetTag, onToggleAssigned }) {
   const assignableReps = reps.filter((r) => r.email);
-  const canAddLead = !(business()?.hidden_pages || []).includes('add_lead');
+  const hiddenPages = business()?.hidden_pages || [];
+  const canAddLead = !hiddenPages.includes('add_lead');
+  const canEditLead = !hiddenPages.includes('edit_lead');
   const [view, setView] = useState(() => localStorage.getItem('leadsView') || 'table');
   function setViewMode(v) {
     setView(v);
@@ -149,7 +151,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
                 </td>
                 <td><OccurrenceBadge n={l.occurrence_count} /></td>
                 <td>
-                  <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} />
+                  <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} canEdit={canEditLead} />
                 </td>
               </tr>
             ))}
@@ -177,7 +179,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
               <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
                 <StatusTagSelects l={l} tags={tags} onSetStatus={onSetStatus} onSetTag={onSetTag} />
                 <div className="grow" />
-                <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} />
+                <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} canEdit={canEditLead} />
               </div>
               <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
                 <AssignedMultiSelect assigned={l.assigned_emails || []} reps={reps} onToggle={email => onToggleAssigned(l, email)} />

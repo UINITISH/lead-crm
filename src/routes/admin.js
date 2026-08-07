@@ -138,6 +138,8 @@ adminRouter.use(async (req, res, next) => {
  * page (mirrors the key in client/src/constants.js) or a narrower feature
  * inside a page that otherwise stays visible, like 'add_lead' (the manual
  * "Add Lead" button on the Leads page, which itself is never hideable).
+ * 'edit_lead' is handled separately, inline in PATCH /leads/:id below,
+ * since it only blocks SOME of that route's fields, not the whole route.
  * Deliberately NOT applied to shared endpoints like /reps or /tags GET,
  * which other pages (the "Acting as" picker, the tag dropdown on every
  * lead) also depend on even when the Settings page itself is hidden.
@@ -569,8 +571,21 @@ adminRouter.get('/leads/:id', async (req, res) => {
  * (campaign_id, adset, gclid, etc.) is deliberately NOT editable here — that
  * proves ad performance and is only ever set at ingestion time.
  */
+// Fields still allowed through PATCH /leads/:id when 'edit_lead' is
+// restricted — the inline Tag dropdown and Assigned picker on the Leads
+// table both go through this same route, and restricting "Edit lead" is
+// about the full editor panel, not those two quick in-row actions. 'actor'
+// is request metadata, not a lead field, so it's always allowed alongside.
+const EDIT_LEAD_QUICK_FIELDS = new Set(['tag', 'assigned_emails', 'actor']);
+
 adminRouter.patch('/leads/:id', async (req, res) => {
   const body = req.body || {};
+  if (req.hidden_pages.includes('edit_lead')) {
+    const hasFullEditField = Object.keys(body).some((k) => !EDIT_LEAD_QUICK_FIELDS.has(k));
+    if (hasFullEditField) {
+      return res.status(403).json({ ok: false, error: 'This feature is not available on your account.' });
+    }
+  }
   const fields = {};
   if ('full_name' in body)      fields.full_name = cleanText(body.full_name, 200);
   if ('email' in body)          fields.email = normalizeEmail(body.email);

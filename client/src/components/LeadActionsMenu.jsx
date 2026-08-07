@@ -18,7 +18,7 @@ import Icon from './Icon.jsx';
  * the button's new position while scrolling — simpler and nothing is lost,
  * since the whole point of opening it was to click Edit/Delete right away).
  */
-export default function LeadActionsMenu({ onEdit, onDelete }) {
+export default function LeadActionsMenu({ onEdit, onDelete, canEdit = true }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnWrapRef = useRef(null);
@@ -63,9 +63,11 @@ export default function LeadActionsMenu({ onEdit, onDelete }) {
           style={{ position: 'fixed', top: pos.top, right: pos.right }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button onClick={() => { setOpen(false); onEdit(); }}>
-            <Icon name="edit-2" size={14} /> Edit lead
-          </button>
+          {canEdit && (
+            <button onClick={() => { setOpen(false); onEdit(); }}>
+              <Icon name="edit-2" size={14} /> Edit lead
+            </button>
+          )}
           <button className="danger" onClick={() => { setOpen(false); onDelete(); }}>
             <Icon name="trash-2" size={14} /> Delete lead
           </button>
