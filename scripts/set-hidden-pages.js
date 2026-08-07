@@ -1,7 +1,9 @@
 /**
- * Restricts (or un-restricts) which pages a login can see and reach — both
- * the sidebar nav item and the underlying API routes that exclusively
- * belong to that page (see blockIfHidden in src/routes/admin.js).
+ * Restricts (or un-restricts) what a login can see and reach — whole NAV
+ * pages, and narrower features within a page that stays visible (e.g. the
+ * manual "Add Lead" button, without hiding the Leads page itself). Applies
+ * both in the sidebar/UI and at the API level for routes exclusive to that
+ * page or feature (see blockIfHidden in src/routes/admin.js).
  *
  * IMPORTANT: a business can be reached by more than one login — its own
  * primary email, plus any extra ones added via scripts/add-login.js, all of
@@ -15,11 +17,14 @@
  * Whichever you target, the OTHER list still applies on top — a login always
  * sees business-wide restrictions plus whatever's set specifically on it.
  *
- * Valid page keys: leads, tickets, forms, ingest, settings, help
- * ('dashboard' isn't hideable — it's the fallback landing page.)
+ * Valid keys:
+ *   Whole pages:      leads, tickets, forms, ingest, settings, help
+ *                      ('dashboard' isn't hideable — it's the fallback landing page.)
+ *   Feature-within-a-page: add_lead (the manual "Add Lead" button on Leads —
+ *                      the Leads page itself stays visible either way)
  *
  * Usage:
- *   node scripts/set-hidden-pages.js --email colleague@client.com --hide settings,forms,ingest --confirm
+ *   node scripts/set-hidden-pages.js --email colleague@client.com --hide settings,forms,ingest,add_lead --confirm
  *   node scripts/set-hidden-pages.js --email colleague@client.com --hide none --confirm   (clears that login's own restrictions)
  *
  * Re-running replaces the full restriction list for whichever login/business
@@ -30,7 +35,7 @@ import 'dotenv/config';
 import { initDb, closeDb } from '../src/db.js';
 import { findLoginByEmail, setHiddenPages, setLoginHiddenPages } from '../src/auth.js';
 
-const HIDEABLE_PAGES = ['leads', 'tickets', 'forms', 'ingest', 'settings', 'help'];
+const HIDEABLE_PAGES = ['leads', 'tickets', 'forms', 'ingest', 'settings', 'help', 'add_lead'];
 
 function parseArgs(argv) {
   const out = { confirm: false };

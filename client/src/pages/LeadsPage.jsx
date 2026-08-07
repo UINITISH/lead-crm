@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Icon from '../components/Icon.jsx';
 import { fmt, tagColorClass } from '../lib/format.js';
-import { token } from '../lib/api.js';
+import { token, business } from '../lib/api.js';
 import { STATUSES } from '../constants.js';
 import LeadActionsMenu from '../components/LeadActionsMenu.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -43,6 +43,7 @@ function StatusTagSelects({ l, tags, onSetStatus, onSetTag }) {
 }
 
 export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, setShowAdd, onEditLead, onDeleteLead, tags = [], onSetStatus, onSetTag }) {
+  const canAddLead = !(business()?.hidden_pages || []).includes('add_lead');
   const [view, setView] = useState(() => localStorage.getItem('leadsView') || 'table');
   function setViewMode(v) {
     setView(v);
@@ -96,7 +97,9 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
           </button>
         </div>
         <button onClick={load}><Icon name="refresh" size={14} /> Refresh</button>
-        <button className="primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={14} /> Add lead</button>
+        {canAddLead && (
+          <button className="primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={14} /> Add lead</button>
+        )}
         <button onClick={() => window.open('/api/admin/export.csv?token=' + encodeURIComponent(token()))}>
           <Icon name="download" size={14} /> Export CSV
         </button>

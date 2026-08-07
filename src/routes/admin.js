@@ -104,16 +104,19 @@ adminRouter.use(async (req, res, next) => {
 });
 
 /**
- * Gate for routes that exclusively belong to a page a client's Business
- * can be restricted from (see businesses.hidden_pages) — mirrors the
- * NAV key from client/src/constants.js. Deliberately NOT applied to shared
- * endpoints like /reps or /tags GET, which other pages (the "Acting as"
- * picker, the tag dropdown on every lead) also depend on even when the
- * Settings page itself is hidden.
+ * Gate for routes that exclusively belong to something a login can be
+ * restricted from (see businesses.hidden_pages / business_logins.hidden_pages,
+ * and HIDEABLE_KEYS in scripts/set-hidden-pages.js) — either a whole NAV
+ * page (mirrors the key in client/src/constants.js) or a narrower feature
+ * inside a page that otherwise stays visible, like 'add_lead' (the manual
+ * "Add Lead" button on the Leads page, which itself is never hideable).
+ * Deliberately NOT applied to shared endpoints like /reps or /tags GET,
+ * which other pages (the "Acting as" picker, the tag dropdown on every
+ * lead) also depend on even when the Settings page itself is hidden.
  */
-function blockIfHidden(pageKey) {
+function blockIfHidden(key) {
   return (req, res, next) => {
-    if (req.hidden_pages.includes(pageKey)) {
+    if (req.hidden_pages.includes(key)) {
       return res.status(403).json({ ok: false, error: 'This feature is not available on your account.' });
     }
     next();
@@ -150,7 +153,7 @@ adminRouter.get('/leads', async (req, res) => {
  * live. Every insert here is flagged entry_method = 'manual' so reporting can
  * always tell manual entries apart from webhook-captured ones.
  */
-adminRouter.post('/leads/manual', async (req, res) => {
+adminRouter.post('/leads/manual', blockIfHidden('add_lead'), async (req, res) => {
   const body = req.body || {};
   const SOURCES = ['meta', 'google', 'website'];
 
