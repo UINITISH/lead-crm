@@ -192,6 +192,37 @@ export async function upsertBusiness({ name, email, password }) {
 }
 
 /**
+ * Resolves an email to a business_id whether it's a business's own primary
+ * login or one added on top via business_logins — same fallback order as
+ * authenticateBusiness, just without the password check. Used by
+ * scripts/set-hidden-pages.js, which needs to find the business but has no
+ * password to verify.
+ */
+export async function findBusinessByAnyEmail(email) {
+  const primary = await findBusinessByEmail(email);
+  if (primary) return primary;
+  const login = await one(
+    `SELECT b.* FROM business_logins bl JOIN businesses b ON b.id = bl.business_id WHERE LOWER(bl.email) = LOWER($1)`,
+    [email],
+  );
+  return login || null;
+}
+
+/**
+ * Sets which page keys (NAV keys in client/src/constants.js — 'settings',
+ * 'forms', 'ingest', etc.) a business's login(s) should NOT be able to see
+ * or reach. Applies to the whole business, so it covers every login that
+ * resolves to that business_id (primary email + any business_logins rows).
+ */
+export async function setHiddenPages(businessId, pages) {
+  const res = await query(
+    `UPDATE businesses SET hidden_pages = $1 WHERE id = $2 RETURNING id, name, email, slug, hidden_pages`,
+    [pages, businessId],
+  );
+  return res.rows[0] || null;
+}
+
+/**
  * Used by scripts/add-login.js — adds another email+password that resolves
  * to an EXISTING business's data, rather than creating a new isolated
  * tenant. Re-running with the same email updates that login's password

@@ -68,7 +68,11 @@ adminRouter.post('/auth/login', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'This login link belongs to a different account' });
   }
   const token = issueSessionToken(business);
-  res.json({ ok: true, token, business: { id: business.id, name: business.name, email: business.email } });
+  res.json({
+    ok: true,
+    token,
+    business: { id: business.id, name: business.name, email: business.email, hidden_pages: business.hidden_pages || [] },
+  });
 });
 
 /** Public — lets the login page show "Sign in to <business>" for a vanity URL, without exposing anything sensitive. */
@@ -79,13 +83,39 @@ adminRouter.get('/business-by-slug/:slug', async (req, res) => {
 });
 
 /** Every route below this line requires a valid session and runs scoped to req.business_id. */
-adminRouter.use((req, res, next) => {
+adminRouter.use(async (req, res, next) => {
   const given = (req.get('Authorization') || '').replace(/^Bearer\s+/i, '') || req.query.token;
   const session = verifySessionToken(given);
   if (!session) return res.status(401).json({ ok: false, error: 'Unauthorized' });
   req.business_id = session.business_id;
+  // Re-checked on every request (rather than baked into the token) so a
+  // restriction set via scripts/set-hidden-pages.js takes effect immediately
+  // for anyone already logged in, not just on their next login.
+  try {
+    const r = await raw(`SELECT hidden_pages FROM businesses WHERE id = $1`, [req.business_id]);
+    req.hidden_pages = r.rows[0]?.hidden_pages || [];
+  } catch {
+    req.hidden_pages = [];
+  }
   next();
 });
+
+/**
+ * Gate for routes that exclusively belong to a page a client's Business
+ * can be restricted from (see businesses.hidden_pages) — mirrors the
+ * NAV key from client/src/constants.js. Deliberately NOT applied to shared
+ * endpoints like /reps or /tags GET, which other pages (the "Acting as"
+ * picker, the tag dropdown on every lead) also depend on even when the
+ * Settings page itself is hidden.
+ */
+function blockIfHidden(pageKey) {
+  return (req, res, next) => {
+    if (req.hidden_pages.includes(pageKey)) {
+      return res.status(403).json({ ok: false, error: 'This feature is not available on your account.' });
+    }
+    next();
+  };
+}
 
 adminRouter.get('/leads', async (req, res) => {
   const rows = await listLeads(req.business_id, {
@@ -596,7 +626,7 @@ adminRouter.get('/report/source', async (req, res) => {
 });
 
 /** Reconciliation view: what came in, what we kept, and why we dropped things. */
-adminRouter.get('/report/ingest', async (req, res) => {
+adminRouter.get('/report/ingest', blockIfHidden('ingest'), async (req, res) => {
   const r = await raw(
     `SELECT source, outcome, reason, COUNT(*) AS n
        FROM ingest_log
@@ -642,11 +672,13 @@ adminRouter.get('/export.csv', async (req, res) => {
  */
 const EDITABLE_SETTINGS = ['company_name', 'dedupe_window_days'];
 
+// Left open even when 'settings' is hidden — the sidebar's company-name
+// branding (App.jsx loadMeta) reads this on every page, not just Settings.
 adminRouter.get('/settings', async (req, res) => {
   res.json({ ok: true, settings: await listSettings(req.business_id) });
 });
 
-adminRouter.patch('/settings', async (req, res) => {
+adminRouter.patch('/settings', blockIfHidden('settings'), async (req, res) => {
   const body = req.body || {};
   const updates = Object.keys(body).filter((k) => EDITABLE_SETTINGS.includes(k));
   if (!updates.length) {
@@ -668,17 +700,17 @@ adminRouter.patch('/settings', async (req, res) => {
 });
 
 /** Which lead sources are wired up (env vars present), and the URLs to paste into each platform. Never exposes secrets. */
-adminRouter.get('/integration-status', async (req, res) => {
+adminRouter.get('/integration-status', blockIfHidden('settings'), async (req, res) => {
   res.json({ ok: true, integrations: getIntegrationStatus(req) });
 });
 
 /** Row counts across the CRM's core tables, plus which database backend is running. */
-adminRouter.get('/data-stats', async (req, res) => {
+adminRouter.get('/data-stats', blockIfHidden('settings'), async (req, res) => {
   res.json({ ok: true, stats: await getDataStats(req.business_id) });
 });
 
 /** Deletes only leads flagged is_test (e.g. Google's "Send test data" button). Real leads are untouched. */
-adminRouter.post('/data/wipe-test-leads', async (req, res) => {
+adminRouter.post('/data/wipe-test-leads', blockIfHidden('settings'), async (req, res) => {
   const deleted = await wipeTestLeads(req.business_id);
   res.json({ ok: true, deleted });
 });
@@ -690,7 +722,7 @@ adminRouter.post('/data/wipe-test-leads', async (req, res) => {
  * but only does something the first time. Global, not business-scoped — the
  * developer directory is shared across every business.
  */
-adminRouter.post('/data/reseed-developers', async (_req, res) => {
+adminRouter.post('/data/reseed-developers', blockIfHidden('settings'), async (_req, res) => {
   const result = await seedDeveloperDirectory();
   res.json({ ok: true, ...result });
 });
@@ -753,6 +785,8 @@ adminRouter.patch('/tags/:id', async (req, res) => {
  * /f/:public_id); these routes are the session-protected management API
  * behind the Forms page.
  */
+adminRouter.use('/forms', blockIfHidden('forms'));
+
 adminRouter.get('/forms', async (req, res) => {
   res.json({ ok: true, forms: await listForms(req.business_id) });
 });

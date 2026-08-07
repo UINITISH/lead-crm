@@ -45,6 +45,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS businesses_email_uniq ON businesses (LOWER(ema
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS slug TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS businesses_slug_uniq ON businesses (slug) WHERE slug IS NOT NULL;
 
+-- Per-client feature restriction: page keys (matching client/src/constants.js
+-- NAV keys — 'settings', 'forms', 'ingest', etc.) that this business should
+-- NOT see or be able to reach, neither in the sidebar nor via the API. Empty
+-- array (the default) means full, unrestricted access — every business today
+-- keeps behaving exactly as before until this is explicitly set via
+-- scripts/set-hidden-pages.js.
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS hidden_pages TEXT[] NOT NULL DEFAULT '{}';
+
 -- A business can be reached by more than one login (owner + a colleague, or
 -- two email addresses for the same team) — every row here is a full set of
 -- credentials, but they all resolve to the SAME business_id, so whoever logs

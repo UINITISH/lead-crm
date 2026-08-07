@@ -22,6 +22,12 @@ export default function App() {
 }
 
 function Dashboard({ onLogout }) {
+  // Pages a restricted client login shouldn't see at all — set per-business
+  // via scripts/set-hidden-pages.js (businesses.hidden_pages). Empty for
+  // every business by default, so this changes nothing unless explicitly set.
+  const hiddenPages = business()?.hidden_pages || [];
+  const visibleNav = NAV.filter((n) => !hiddenPages.includes(n.key));
+
   const [page, setPage] = useState('dashboard');
   const [leads, setLeads] = useState([]);
   const [report, setReport] = useState([]);
@@ -34,6 +40,13 @@ function Dashboard({ onLogout }) {
   const [companyName, setCompanyName] = useState('Findmigo');
   const [reps, setReps] = useState([]);
   const [tags, setTags] = useState([]);
+
+  // Defensive — there's no UI path to a hidden page (it's just not in
+  // visibleNav), but if hidden_pages changes while someone's already sitting
+  // on a page that just became restricted, bounce them off it.
+  useEffect(() => {
+    if (hiddenPages.includes(page)) setPage('dashboard');
+  }, [hiddenPages, page]);
 
   useEffect(() => {
     if (actingAs) sessionStorage.setItem('crm_actor', actingAs);
@@ -91,7 +104,7 @@ function Dashboard({ onLogout }) {
           <p className="name">{companyName}</p>
           <LeadNotifications onOpenLead={() => { setPage('leads'); load(); }} />
         </div>
-        {NAV.map(n => (
+        {visibleNav.map(n => (
           <button key={n.key} className={'nav-item' + (page === n.key ? ' active' : '')}
                   onClick={() => setPage(n.key)}>
             <Icon name={n.icon} size={17} />{n.label}
