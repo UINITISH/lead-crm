@@ -9,18 +9,6 @@ import Pagination from '../components/Pagination.jsx';
 
 const LEADS_PAGE_SIZE = 50;
 
-/** Splits "Prestige Group, Sumadhura Group" into separate small tags instead of one long string. */
-function DeveloperPills({ developerName, projectName }) {
-  const names = (developerName || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (!names.length) return <>{projectName || '—'}</>;
-  return (
-    <div className="dev-pills">
-      {names.map((n, i) => <span className="dev-pill" key={i}>{n}</span>)}
-      {projectName && <span className="muted" style={{ fontSize: 11, width: '100%' }}>{projectName}</span>}
-    </div>
-  );
-}
-
 /** Small "×N" badge for a lead that's enquired more than once — hidden entirely for a first-time enquiry. */
 function OccurrenceBadge({ n }) {
   if (!n || n <= 1) return <span className="muted">—</span>;
@@ -132,7 +120,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
       {view === 'table' ? (
         <table>
           <thead><tr>
-            <th>Received</th><th>Source</th><th>Developer / project</th><th>Name</th>
+            <th>Received</th><th>Source</th><th>Name</th>
             <th>Phone</th><th>Budget</th><th>Status</th><th>Tag</th><th>Assigned</th><th>Occ.</th><th></th>
           </tr></thead>
           <tbody>
@@ -140,11 +128,6 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
               <tr key={l.id} className={l.viewed_at ? '' : 'lead-unviewed'}>
                 <td className="muted">{fmt(l.created_at)}</td>
                 <td><span className={'pill src-' + l.source}>{l.source}</span></td>
-                <td className="muted">
-                  {l.developer_name || l.project_name
-                    ? <DeveloperPills developerName={l.developer_name} projectName={l.project_name} />
-                    : (l.campaign_name || l.utm_campaign || '—')}
-                </td>
                 <td>{l.full_name || '—'}</td>
                 <td>{l.phone_e164}</td>
                 <td className="muted">{l.budget_range || '—'}</td>
@@ -170,8 +153,8 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
                 </td>
               </tr>
             ))}
-            {!leads.length && !loading && <tr><td colSpan={11} className="empty">No leads match these filters.</td></tr>}
-            {loading && <tr><td colSpan={11} className="empty">Loading…</td></tr>}
+            {!leads.length && !loading && <tr><td colSpan={10} className="empty">No leads match these filters.</td></tr>}
+            {loading && <tr><td colSpan={10} className="empty">Loading…</td></tr>}
           </tbody>
         </table>
       ) : (
@@ -186,13 +169,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
                 <span className={'pill src-' + l.source}>{l.source}</span>
               </div>
 
-              <div style={{ marginTop: 10, fontSize: 12.5 }}>
-                {l.developer_name || l.project_name
-                  ? <DeveloperPills developerName={l.developer_name} projectName={l.project_name} />
-                  : <span className="muted">{l.campaign_name || l.utm_campaign || 'No developer/project set'}</span>}
-              </div>
-
-              <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+              <div className="muted" style={{ marginTop: 10, fontSize: 12 }}>
                 {l.budget_range || 'Budget not set'} · {fmt(l.created_at)}
                 {l.occurrence_count > 1 && <> · <span style={{ color: 'var(--warn)' }}>enquired {l.occurrence_count}×</span></>}
               </div>
