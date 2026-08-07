@@ -59,12 +59,9 @@ button.primary:hover { background:#255fd6; }
 .src-meta   { color:#1a56db; background:#e8f0fe; }
 .src-google { color:var(--warn); background:var(--warn-bg); }
 .src-website{ color:var(--good); background:var(--good-bg); }
-.st-new{color:var(--accent); background:var(--accent-bg)}
-.st-contacted{color:var(--warn); background:var(--warn-bg)}
-.st-site_visit{color:var(--pro); background:var(--pro-bg)}
-.st-negotiation{color:#b45309; background:#fdf1de}
+.st-pickup{color:var(--accent); background:var(--accent-bg)}
 .st-closed{color:var(--good); background:var(--good-bg)}
-.st-dropped{color:var(--muted); background:#f0f1f3}
+.st-not_interested{color:var(--muted); background:#f0f1f3}
 .em-manual { color:var(--pro); background:var(--pro-bg); }
 .em-automatic { color:var(--muted); background:#f0f1f3; }
 .deal-negotiation { color:var(--pro); background:var(--pro-bg); }

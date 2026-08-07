@@ -10,7 +10,7 @@ export const HELP_TOPICS = [
   {
     id: 'leads',
     title: 'Leads: status vs. tags, editing, and the activity thread',
-    keywords: 'leads status tag pipeline new contacted site visit negotiation closed dropped warm cold junk scheduled kebab edit delete duplicate activity notes',
+    keywords: 'leads status tag pipeline pickup closed not interested warm cold junk scheduled kebab edit delete duplicate activity notes',
     body: (
       <>
         <p>
@@ -19,15 +19,14 @@ export const HELP_TOPICS = [
         </p>
         <h3>Status</h3>
         <p>
-          <strong>New → Contacted → Site Visit → Negotiation → Closed / Dropped.</strong> This is the pipeline stage.
-          It drives the Dashboard funnel, and a lead has to reach <strong>Negotiation</strong> or <strong>Closed</strong> before
-          a Deal can be opened for it.
+          <strong>Pickup → Closed / Not interested.</strong> This is the pipeline stage. Every new lead starts at
+          Pickup; a Deal can be opened for it at any status.
         </p>
         <h3>Tag</h3>
         <p>
           <strong>Warm, Cold, Junk, Scheduled</strong> — or anything else you add in Settings → Lead tags. This is a
-          separate, informational label, independent of status. A lead can be "new" and "warm" at the same time, or
-          "contacted" and "junk". Use it for call outcomes: no answer, invalid number, coordinating on WhatsApp, ready
+          separate, informational label, independent of status. A lead can be "Pickup" and "warm" at the same time, or
+          "Pickup" and "junk". Use it for call outcomes: no answer, invalid number, coordinating on WhatsApp, ready
           for a site visit — whatever your team actually says day to day.
         </p>
         <h3>Editing right from the table</h3>
@@ -218,8 +217,7 @@ export const HELP_TOPICS = [
     body: (
       <>
         <p>
-          A deal is a real, specific negotiation — distinct from a lead. It only becomes available once a lead reaches{' '}
-          <strong>Negotiation</strong> or <strong>Closed</strong> status, and carries fields a lead never has: which
+          A deal is a real, specific negotiation — distinct from a lead. It carries fields a lead never has: which
           unit, the agreed price, and an expected closing date. Stages run{' '}
           <strong>Negotiation → Booked → Closed won / Closed lost.</strong>
         </p>

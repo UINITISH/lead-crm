@@ -267,10 +267,10 @@ console.log('\n=== Acceptance criteria ===\n');
   await fetch(`${BASE}/api/admin/leads/${target.id}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
-    body: JSON.stringify({ status: 'site_visit', note: 'Visited Tower B', actor: 'priya' }),
+    body: JSON.stringify({ status: 'closed', note: 'Visited Tower B', actor: 'priya' }),
   });
   const { lead } = await admin(`/api/admin/leads/${target.id}`);
-  check('Status change is applied', lead.status === 'site_visit');
+  check('Status change is applied', lead.status === 'closed');
   check('  status change recorded in the lifecycle trail with an actor',
         lead.events.some(e => e.event_type === 'status_change' && e.actor === 'priya'));
 

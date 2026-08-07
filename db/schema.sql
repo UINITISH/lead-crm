@@ -587,6 +587,49 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS leads_viewed_idx ON leads (viewed_at);
 
 -- ---------------------------------------------------------------------------
+-- leads.status simplified from 6 stages (new/contacted/site_visit/
+-- negotiation/closed/dropped) down to 3: pickup, closed, not_interested.
+-- Switched from a native enum to plain TEXT + CHECK (same pattern already
+-- used for tickets.status/deals.stage below) because Postgres enums can only
+-- ever gain values, never lose or rename them — TEXT + CHECK can be
+-- redefined freely if the stage list changes again later. lead_events'
+-- from_status/to_status (the audit trail) get the same type change so old
+-- history keeps rendering, but are left unconstrained on purpose — a past
+-- event genuinely said "site_visit" and should keep saying that forever,
+-- not get rewritten to fit the current stage list.
+--
+-- Wrapped in a data_type check so the (one-time, table-rewriting) TYPE
+-- conversion and value remap only ever run once, not on every cold start's
+-- migrate() call — after the first run the column is already TEXT and this
+-- whole block is skipped.
+-- ---------------------------------------------------------------------------
+DO $$ BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+       WHERE table_name = 'leads' AND column_name = 'status') <> 'text' THEN
+    ALTER TABLE leads ALTER COLUMN status DROP DEFAULT;
+    ALTER TABLE leads ALTER COLUMN status TYPE TEXT USING status::text;
+    ALTER TABLE leads ALTER COLUMN status SET DEFAULT 'pickup';
+
+    UPDATE leads SET status = CASE
+      WHEN status IN ('new', 'contacted', 'site_visit', 'negotiation') THEN 'pickup'
+      WHEN status = 'dropped' THEN 'not_interested'
+      ELSE status  -- 'closed' stays 'closed'
+    END;
+  END IF;
+
+  IF (SELECT data_type FROM information_schema.columns
+       WHERE table_name = 'lead_events' AND column_name = 'from_status') <> 'text' THEN
+    ALTER TABLE lead_events ALTER COLUMN from_status TYPE TEXT USING from_status::text;
+    ALTER TABLE lead_events ALTER COLUMN to_status TYPE TEXT USING to_status::text;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE leads ADD CONSTRAINT leads_status_chk
+    CHECK (status IN ('pickup', 'closed', 'not_interested'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$

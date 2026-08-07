@@ -136,7 +136,7 @@ export async function addEvent(businessId, leadId, { event_type, from_status = n
  * what proves ad performance and is only ever set at ingestion time, never
  * edited after the fact. `tag` (Warm/Cold/Junk/Scheduled/…) is a separate,
  * informational classification independent of `status` — the pipeline stage
- * (new/contacted/site_visit/negotiation/closed/dropped) that drives the
+ * (pickup/closed/not_interested) that drives the
  * dashboard funnel and deal eligibility stays untouched by this list, on
  * purpose, and is changed only via updateStatus().
  */
@@ -288,8 +288,8 @@ export async function sourceReport(businessId, { from = null, to = null } = {}) 
         COALESCE(campaign_name, campaign_id, '(not set)') AS campaign,
         COUNT(*) FILTER (WHERE is_duplicate = FALSE)            AS unique_leads,
         COUNT(*)                                               AS gross_leads,
-        COUNT(*) FILTER (WHERE status <> 'new' AND is_duplicate = FALSE) AS contacted_plus,
-        COUNT(*) FILTER (WHERE status = 'site_visit' AND is_duplicate = FALSE) AS site_visits,
+        COUNT(*) FILTER (WHERE status <> 'pickup' AND is_duplicate = FALSE) AS contacted_plus,
+        COUNT(*) FILTER (WHERE tag ILIKE '%site%visit%' AND is_duplicate = FALSE) AS site_visits,
         COUNT(*) FILTER (WHERE status = 'closed' AND is_duplicate = FALSE)     AS closed
      FROM leads
      ${clause}
@@ -355,15 +355,15 @@ export async function dashboardStats(businessId) {
         COUNT(*) FILTER (WHERE ${base} AND created_at >= date_trunc('month', now()))       AS this_month,
         COUNT(*) FILTER (WHERE ${base} AND created_at >= date_trunc('month', now()) - interval '1 month'
                                        AND created_at <  date_trunc('month', now()))        AS last_month,
-        COUNT(*) FILTER (WHERE ${base} AND status NOT IN ('closed','dropped'))              AS open_pipeline,
-        COUNT(*) FILTER (WHERE ${base} AND status NOT IN ('closed','dropped')
+        COUNT(*) FILTER (WHERE ${base} AND status NOT IN ('closed','not_interested'))              AS open_pipeline,
+        COUNT(*) FILTER (WHERE ${base} AND status NOT IN ('closed','not_interested')
                                        AND created_at >= date_trunc('month', now()))         AS open_this_month,
-        COUNT(*) FILTER (WHERE ${base} AND status NOT IN ('closed','dropped')
+        COUNT(*) FILTER (WHERE ${base} AND status NOT IN ('closed','not_interested')
                                        AND created_at >= date_trunc('month', now()) - interval '1 month'
                                        AND created_at <  date_trunc('month', now()))         AS open_last_month,
         COUNT(*) FILTER (WHERE ${base} AND status = 'closed')                               AS closed_total,
-        COALESCE(SUM(${BUDGET_MIDPOINT}) FILTER (WHERE ${base} AND status NOT IN ('closed','dropped')), 0) AS pipeline_value,
-        COALESCE(SUM(${BUDGET_MIDPOINT}) FILTER (WHERE ${base} AND status NOT IN ('closed','dropped')
+        COALESCE(SUM(${BUDGET_MIDPOINT}) FILTER (WHERE ${base} AND status NOT IN ('closed','not_interested')), 0) AS pipeline_value,
+        COALESCE(SUM(${BUDGET_MIDPOINT}) FILTER (WHERE ${base} AND status NOT IN ('closed','not_interested')
                                        AND created_at >= date_trunc('month', now()) - interval '1 month'
                                        AND created_at <  date_trunc('month', now())), 0)     AS pipeline_value_last_month
      FROM leads
@@ -380,7 +380,7 @@ export async function dashboardStats(businessId) {
       GROUP BY status`,
     [businessId],
   );
-  const stages = ['new', 'contacted', 'site_visit', 'negotiation', 'closed', 'dropped'].map((s) => {
+  const stages = ['pickup', 'closed', 'not_interested'].map((s) => {
     const row = stageRows.rows.find((r) => r.status === s);
     return { status: s, n: row ? Number(row.n) : 0, value: row ? Number(row.value) : 0 };
   });

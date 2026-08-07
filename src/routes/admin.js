@@ -282,11 +282,12 @@ adminRouter.patch('/followups/:id', async (req, res) => {
 });
 
 /**
- * Deals. Distinct from a lead — a deal only makes sense once a lead has
- * reached negotiation (or later), which is why creation is gated on the
- * lead's current status rather than left to the caller's judgment.
+ * Deals. Kept as an explicit allow-list (rather than always allowing it)
+ * even though it currently includes every status — if the status list ever
+ * grows again and some early stage genuinely shouldn't allow opening a deal
+ * yet, this is the one place to change that.
  */
-const DEAL_ELIGIBLE_STATUSES = ['negotiation', 'closed'];
+const DEAL_ELIGIBLE_STATUSES = ['pickup', 'closed', 'not_interested'];
 
 adminRouter.get('/deals', async (req, res) => {
   res.json({ ok: true, deals: await listDeals(req.business_id, { stage: req.query.stage, limit: req.query.limit }) });
@@ -312,7 +313,7 @@ adminRouter.post('/leads/:id/deals', async (req, res) => {
   if (!DEAL_ELIGIBLE_STATUSES.includes(lead.status)) {
     return res.status(400).json({
       ok: false,
-      error: `A deal can only be opened once the lead reaches negotiation. This lead is at "${lead.status.replace('_', ' ')}".`,
+      error: `A deal can't be opened for a lead at "${lead.status.replace('_', ' ')}".`,
     });
   }
 
@@ -580,7 +581,7 @@ adminRouter.post('/leads/:id/notes', async (req, res) => {
 
 adminRouter.patch('/leads/:id/status', async (req, res) => {
   const { status, note, actor } = req.body || {};
-  const allowed = ['new', 'contacted', 'site_visit', 'negotiation', 'closed', 'dropped'];
+  const allowed = ['pickup', 'closed', 'not_interested'];
   if (!allowed.includes(status)) {
     return res.status(400).json({ ok: false, error: `status must be one of ${allowed.join(', ')}` });
   }

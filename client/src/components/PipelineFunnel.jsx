@@ -1,10 +1,10 @@
 import { fmtINR } from '../lib/format.js';
 
-const LABELS = { new: 'New lead', contacted: 'Contacted', site_visit: 'Site visit', negotiation: 'Negotiation', closed: 'Closed won' };
-const COLORS = ['#2f6fed', '#3b82c4', '#6b3fa0', '#b45309', '#1a9d6c'];
+const LABELS = { pickup: 'Pickup', closed: 'Closed', not_interested: 'Not interested' };
+const COLORS = ['#2f6fed', '#1a9d6c', '#8a94a6'];
 
 export default function PipelineFunnel({ stages }) {
-  const visible = stages.filter(s => s.status !== 'dropped');
+  const visible = stages.filter(s => s.status !== 'not_interested');
   return (
     <div className="card">
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
