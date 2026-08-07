@@ -42,7 +42,7 @@ function StatusTagSelects({ l, tags, onSetStatus, onSetTag }) {
   );
 }
 
-export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, open, setShowAdd, onEditLead, onDeleteLead, tags = [], onSetStatus, onSetTag }) {
+export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, setShowAdd, onEditLead, onDeleteLead, tags = [], onSetStatus, onSetTag }) {
   const [view, setView] = useState(() => localStorage.getItem('leadsView') || 'table');
   function setViewMode(v) {
     setView(v);
@@ -128,7 +128,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
           </tr></thead>
           <tbody>
             {pageLeads.map(l => (
-              <tr key={l.id} className={l.viewed_at ? '' : 'lead-unviewed'} onClick={() => open(l.id)}>
+              <tr key={l.id} className={l.viewed_at ? '' : 'lead-unviewed'}>
                 <td className="muted">{fmt(l.created_at)}</td>
                 <td><span className={'pill src-' + l.source}>{l.source}</span></td>
                 <td className="muted">
@@ -165,7 +165,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
       ) : (
         <div className="cards" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))' }}>
           {pageLeads.map(l => (
-            <div className={'card' + (l.viewed_at ? '' : ' lead-unviewed')} key={l.id} style={{ cursor: 'pointer' }} onClick={() => open(l.id)}>
+            <div className={'card' + (l.viewed_at ? '' : ' lead-unviewed')} key={l.id}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: l.viewed_at ? 600 : 800, fontSize: 14 }}>{l.full_name || 'Unnamed lead'}</div>
