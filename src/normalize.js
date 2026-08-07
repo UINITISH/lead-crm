@@ -60,6 +60,21 @@ export function normalizeEmail(input) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s) ? s : null;
 }
 
+/**
+ * Looser sibling of normalizeEmail — trims + lowercases but does NOT require
+ * an @ / domain. reps.email doubles as the "assignment id" a lead's
+ * assigned_emails is matched against (see resolveAssignedEmails in
+ * src/routes/admin.js) — some businesses want a rep assignable by a short
+ * handle (e.g. "anish") rather than a real address, and the value is never
+ * typed freely by an end user anyway (picked from the Team list dropdown),
+ * so there's no real address-format hazard to guard against here.
+ */
+export function normalizeAssignId(input) {
+  if (input == null) return null;
+  const s = String(input).trim().toLowerCase();
+  return s || null;
+}
+
 export function cleanText(input, max = 500) {
   if (input == null) return null;
   const s = String(input).replace(/\s+/g, ' ').trim();

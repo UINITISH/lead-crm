@@ -38,7 +38,7 @@ import { renderFormPreview } from './publicForm.js';
 import {
   createTicket, listTickets, getTicket, updateTicket, deleteTicket, ticketStats,
 } from '../tickets.js';
-import { normalizePhone, normalizeEmail, cleanText } from '../normalize.js';
+import { normalizePhone, normalizeEmail, normalizeAssignId, cleanText } from '../normalize.js';
 import { authenticateBusiness, issueSessionToken, verifySessionToken, findBusinessBySlug, getEffectiveHiddenPages } from '../auth.js';
 
 const toNum = (v) => {
@@ -48,17 +48,23 @@ const toNum = (v) => {
 };
 
 /**
- * Normalizes an assignee list to lowercase, de-duplicated emails and checks
- * every one of them against this business's own Settings → Team list — a
- * lead can only be assigned to a REGISTERED rep's email, picked from that
- * list client-side, not typed freely (see the "Pick from your Team list"
- * design this follows). Returns { emails, unknown } — unknown is which
- * inputs didn't match an existing rep's email, for the route to reject with
- * a specific error rather than silently dropping them.
+ * Normalizes an assignee list to lowercase, de-duplicated identifiers and
+ * checks every one of them against this business's own Settings → Team list
+ * — a lead can only be assigned to a REGISTERED rep's email, picked from
+ * that list client-side, not typed freely (see the "Pick from your Team
+ * list" design this follows). Returns { emails, unknown } — unknown is
+ * which inputs didn't match an existing rep's email, for the route to
+ * reject with a specific error rather than silently dropping them.
+ *
+ * Uses normalizeAssignId rather than the stricter normalizeEmail — a rep's
+ * "email" here is really just its assignment identifier, and some
+ * businesses use a short handle (e.g. "anish") instead of a real address.
+ * normalizeEmail would silently strip those, which broke assignment
+ * entirely for non-@ handles.
  */
 async function resolveAssignedEmails(businessId, input) {
   const arr = Array.isArray(input) ? input : String(input ?? '').split(',');
-  const emails = [...new Set(arr.map((e) => normalizeEmail(e)).filter(Boolean))];
+  const emails = [...new Set(arr.map((e) => normalizeAssignId(e)).filter(Boolean))];
   if (!emails.length) return { emails: [], unknown: [] };
   const rows = await raw(
     `SELECT LOWER(email) AS email FROM reps WHERE business_id = $1 AND email IS NOT NULL AND LOWER(email) = ANY($2::text[])`,
@@ -781,21 +787,15 @@ adminRouter.get('/reps', async (req, res) => {
 adminRouter.post('/reps', async (req, res) => {
   const { name, email } = req.body || {};
   if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
-  if (email && !normalizeEmail(email)) {
-    return res.status(400).json({ ok: false, error: 'That doesn’t look like a valid email address', field: 'email' });
-  }
-  const rep = await createRep(req.business_id, name, normalizeEmail(email));
+  const rep = await createRep(req.business_id, name, normalizeAssignId(email));
   res.status(201).json({ ok: true, rep });
 });
 
 adminRouter.patch('/reps/:id', async (req, res) => {
   const { name, email, is_active } = req.body || {};
-  if (email && !normalizeEmail(email)) {
-    return res.status(400).json({ ok: false, error: 'That doesn’t look like a valid email address', field: 'email' });
-  }
   const rep = await updateRep(req.business_id, req.params.id, {
     name: name !== undefined ? name : undefined,
-    email: email !== undefined ? (email ? normalizeEmail(email) : null) : undefined,
+    email: email !== undefined ? normalizeAssignId(email) : undefined,
     is_active: is_active !== undefined ? is_active : undefined,
   });
   if (!rep) return res.status(404).json({ ok: false, error: 'Not found' });
