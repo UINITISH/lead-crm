@@ -90,6 +90,22 @@ function Dashboard({ onLogout }) {
     await load();
   }
 
+  // Toggles a single email on/off a lead's assigned_emails — the caller
+  // (AssignedMultiSelect) always passes the ONE email that was just
+  // clicked, not the whole new list, so it doesn't need to know the lead's
+  // current assignment itself.
+  async function toggleAssigned(lead, email) {
+    const current = new Set((lead.assigned_emails || []).map((e) => e.toLowerCase()));
+    const lower = email.toLowerCase();
+    if (current.has(lower)) current.delete(lower); else current.add(lower);
+    const r = await api(`/leads/${lead.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ assigned_emails: Array.from(current), actor: actingAs || 'admin' }),
+    });
+    if (!r.ok) { setError(r.error); return; }
+    setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, assigned_emails: r.lead.assigned_emails } : l)));
+  }
+
   async function deleteLead(lead) {
     const ok = window.confirm(`Delete ${lead.full_name || lead.phone_e164}? This removes the lead and its whole history — can't be undone.`);
     if (!ok) return;
@@ -148,8 +164,8 @@ function Dashboard({ onLogout }) {
         {page === 'leads' && (
           <LeadsPage leads={leads} report={report} filters={filters} setFilters={setFilters}
                      loading={loading} error={error} load={load} setShowAdd={setShowAdd}
-                     onEditLead={setEditingLead} onDeleteLead={deleteLead} tags={tags}
-                     onSetStatus={setStatus} onSetTag={setTag} />
+                     onEditLead={setEditingLead} onDeleteLead={deleteLead} tags={tags} reps={reps}
+                     onSetStatus={setStatus} onSetTag={setTag} onToggleAssigned={toggleAssigned} />
         )}
         {page === 'dashboard' && <DashboardPage leads={leads} report={report} load={load} actingAs={actingAs} />}
         {page === 'tickets' && <TicketsPage reps={reps} actingAs={actingAs} />}

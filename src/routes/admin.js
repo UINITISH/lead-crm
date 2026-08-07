@@ -47,6 +47,28 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/**
+ * Normalizes an assignee list to lowercase, de-duplicated emails and checks
+ * every one of them against this business's own Settings → Team list — a
+ * lead can only be assigned to a REGISTERED rep's email, picked from that
+ * list client-side, not typed freely (see the "Pick from your Team list"
+ * design this follows). Returns { emails, unknown } — unknown is which
+ * inputs didn't match an existing rep's email, for the route to reject with
+ * a specific error rather than silently dropping them.
+ */
+async function resolveAssignedEmails(businessId, input) {
+  const arr = Array.isArray(input) ? input : String(input ?? '').split(',');
+  const emails = [...new Set(arr.map((e) => normalizeEmail(e)).filter(Boolean))];
+  if (!emails.length) return { emails: [], unknown: [] };
+  const rows = await raw(
+    `SELECT LOWER(email) AS email FROM reps WHERE business_id = $1 AND email IS NOT NULL AND LOWER(email) = ANY($2::text[])`,
+    [businessId, emails],
+  );
+  const known = new Set(rows.rows.map((r) => r.email));
+  const unknown = emails.filter((e) => !known.has(e));
+  return { emails, unknown };
+}
+
 export const adminRouter = express.Router();
 
 /**
@@ -131,6 +153,7 @@ adminRouter.get('/leads', async (req, res) => {
     campaign_id: req.query.campaign_id,
     entry_method: req.query.entry_method,
     developer_name: req.query.developer_name,
+    assigned_email: req.query.assigned_email,
     from: req.query.from,
     to: req.query.to,
     q: req.query.q,
@@ -569,6 +592,20 @@ adminRouter.patch('/leads/:id', async (req, res) => {
     }
     fields.source = body.source;
   }
+  // '' / [] clears the assignment. Only registered reps' emails are
+  // accepted (see resolveAssignedEmails) — the UI picks from Settings →
+  // Team, so anything else here is either a bug or a stale/removed rep.
+  if ('assigned_emails' in body) {
+    const { emails, unknown } = await resolveAssignedEmails(req.business_id, body.assigned_emails);
+    if (unknown.length) {
+      return res.status(400).json({
+        ok: false,
+        error: `Not a registered team email: ${unknown.join(', ')}. Add them under Settings → Team first.`,
+        field: 'assigned_emails',
+      });
+    }
+    fields.assigned_emails = emails;
+  }
 
   if (!Object.keys(fields).length) {
     return res.status(400).json({ ok: false, error: 'No editable fields in request.' });
@@ -742,16 +779,23 @@ adminRouter.get('/reps', async (req, res) => {
 });
 
 adminRouter.post('/reps', async (req, res) => {
-  const name = (req.body || {}).name;
+  const { name, email } = req.body || {};
   if (!cleanText(name)) return res.status(400).json({ ok: false, error: 'name is required' });
-  const rep = await createRep(req.business_id, name);
+  if (email && !normalizeEmail(email)) {
+    return res.status(400).json({ ok: false, error: 'That doesn’t look like a valid email address', field: 'email' });
+  }
+  const rep = await createRep(req.business_id, name, normalizeEmail(email));
   res.status(201).json({ ok: true, rep });
 });
 
 adminRouter.patch('/reps/:id', async (req, res) => {
-  const { name, is_active } = req.body || {};
+  const { name, email, is_active } = req.body || {};
+  if (email && !normalizeEmail(email)) {
+    return res.status(400).json({ ok: false, error: 'That doesn’t look like a valid email address', field: 'email' });
+  }
   const rep = await updateRep(req.business_id, req.params.id, {
     name: name !== undefined ? name : undefined,
+    email: email !== undefined ? (email ? normalizeEmail(email) : null) : undefined,
     is_active: is_active !== undefined ? is_active : undefined,
   });
   if (!rep) return res.status(404).json({ ok: false, error: 'Not found' });

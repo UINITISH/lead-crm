@@ -367,6 +367,11 @@ CREATE INDEX IF NOT EXISTS reps_business_idx ON reps (business_id);
 DROP INDEX IF EXISTS reps_name_uniq;
 CREATE UNIQUE INDEX IF NOT EXISTS reps_name_uniq ON reps (business_id, LOWER(name));
 
+-- Optional — only reps with an email set are assignable on a lead (see
+-- leads.assigned_emails below). Nullable and unvalidated for uniqueness on
+-- purpose: not every rep needs one, and a shared inbox address is fine too.
+ALTER TABLE reps ADD COLUMN IF NOT EXISTS email TEXT;
+
 -- ---------------------------------------------------------------------------
 -- ingest_log — every inbound hit, accepted or not
 -- This is your evidence file. When the client says "Meta reports 300 and you
@@ -680,3 +685,13 @@ DROP TRIGGER IF EXISTS deal_documents_touch_updated_at ON deal_documents;
 CREATE TRIGGER deal_documents_touch_updated_at
   BEFORE UPDATE ON deal_documents
   FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- leads.assigned_emails — which registered team member(s) (see reps.email
+-- above) this lead is assigned to. Stored as email addresses rather than a
+-- reps foreign key for the same reason developer_name/project_name are
+-- plain text elsewhere in this table: a rep being renamed or removed later
+-- shouldn't silently rewrite or orphan what a lead's assignment history
+-- actually said. A lead can have zero, one, or several assignees.
+-- ---------------------------------------------------------------------------
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_emails TEXT[] NOT NULL DEFAULT '{}';

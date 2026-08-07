@@ -4,6 +4,7 @@ import { fmt, tagColorClass } from '../lib/format.js';
 import { token, business } from '../lib/api.js';
 import { STATUSES } from '../constants.js';
 import LeadActionsMenu from '../components/LeadActionsMenu.jsx';
+import AssignedMultiSelect from '../components/AssignedMultiSelect.jsx';
 import Pagination from '../components/Pagination.jsx';
 
 const LEADS_PAGE_SIZE = 50;
@@ -42,7 +43,8 @@ function StatusTagSelects({ l, tags, onSetStatus, onSetTag }) {
   );
 }
 
-export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, setShowAdd, onEditLead, onDeleteLead, tags = [], onSetStatus, onSetTag }) {
+export default function LeadsPage({ leads, report, filters, setFilters, loading, error, load, setShowAdd, onEditLead, onDeleteLead, tags = [], reps = [], onSetStatus, onSetTag, onToggleAssigned }) {
+  const assignableReps = reps.filter((r) => r.email);
   const canAddLead = !(business()?.hidden_pages || []).includes('add_lead');
   const [view, setView] = useState(() => localStorage.getItem('leadsView') || 'table');
   function setViewMode(v) {
@@ -86,6 +88,10 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
           <option value="">All tags</option>
           {tags.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
         </select>
+        <select value={filters.assigned_email || ''} onChange={e => setFilters(f => ({ ...f, assigned_email: e.target.value }))}>
+          <option value="">Assigned to anyone</option>
+          {assignableReps.map(r => <option key={r.id} value={r.email}>{r.name}</option>)}
+        </select>
         <div className="kebab-wrap" style={{ display: 'flex', border: '1px solid var(--line)', borderRadius: 7, overflow: 'hidden' }}>
           <button title="Table view" onClick={() => setViewMode('table')}
                   style={{ border: 'none', borderRadius: 0, background: view === 'table' ? 'var(--accent-bg)' : '#fff', color: view === 'table' ? 'var(--accent)' : 'var(--muted)' }}>
@@ -127,7 +133,7 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
         <table>
           <thead><tr>
             <th>Received</th><th>Source</th><th>Developer / project</th><th>Name</th>
-            <th>Phone</th><th>Budget</th><th>Status</th><th>Tag</th><th>Occ.</th><th></th>
+            <th>Phone</th><th>Budget</th><th>Status</th><th>Tag</th><th>Assigned</th><th>Occ.</th><th></th>
           </tr></thead>
           <tbody>
             {pageLeads.map(l => (
@@ -155,14 +161,17 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
                     {tags.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                   </select>
                 </td>
+                <td onClick={e => e.stopPropagation()}>
+                  <AssignedMultiSelect assigned={l.assigned_emails || []} reps={reps} onToggle={email => onToggleAssigned(l, email)} />
+                </td>
                 <td><OccurrenceBadge n={l.occurrence_count} /></td>
                 <td>
                   <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} />
                 </td>
               </tr>
             ))}
-            {!leads.length && !loading && <tr><td colSpan={10} className="empty">No leads match these filters.</td></tr>}
-            {loading && <tr><td colSpan={10} className="empty">Loading…</td></tr>}
+            {!leads.length && !loading && <tr><td colSpan={11} className="empty">No leads match these filters.</td></tr>}
+            {loading && <tr><td colSpan={11} className="empty">Loading…</td></tr>}
           </tbody>
         </table>
       ) : (
@@ -188,10 +197,13 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
                 {l.occurrence_count > 1 && <> · <span style={{ color: 'var(--warn)' }}>enquired {l.occurrence_count}×</span></>}
               </div>
 
-              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
                 <StatusTagSelects l={l} tags={tags} onSetStatus={onSetStatus} onSetTag={onSetTag} />
                 <div className="grow" />
                 <LeadActionsMenu onEdit={() => onEditLead(l)} onDelete={() => onDeleteLead(l)} />
+              </div>
+              <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                <AssignedMultiSelect assigned={l.assigned_emails || []} reps={reps} onToggle={email => onToggleAssigned(l, email)} />
               </div>
             </div>
           ))}

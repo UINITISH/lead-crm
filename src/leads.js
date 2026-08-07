@@ -138,12 +138,15 @@ export async function addEvent(businessId, leadId, { event_type, from_status = n
  * informational classification independent of `status` — the pipeline stage
  * (pickup/closed/not_interested) that drives the
  * dashboard funnel and deal eligibility stays untouched by this list, on
- * purpose, and is changed only via updateStatus().
+ * purpose, and is changed only via updateStatus(). `assigned_emails` is who
+ * this lead is assigned to, stored as email addresses (see leads.assigned_emails
+ * in db/schema.sql) — validated against Settings → Team at the route level
+ * (see PATCH /leads/:id in admin.js), not here.
  */
 const EDITABLE_LEAD_FIELDS = [
   'full_name', 'email', 'phone_raw', 'phone_e164', 'source',
   'budget_range', 'budget_min', 'budget_max', 'timeline',
-  'developer_name', 'project_name', 'tag',
+  'developer_name', 'project_name', 'tag', 'assigned_emails',
 ];
 
 /**
@@ -207,6 +210,7 @@ function buildLeadWhere(businessId, filters) {
   if (filters.campaign_id)   add('campaign_id = ?', filters.campaign_id);
   if (filters.entry_method)  add('entry_method = ?', filters.entry_method);
   if (filters.developer_name) add('developer_name = ?', filters.developer_name);
+  if (filters.assigned_email) add('? = ANY(assigned_emails)', filters.assigned_email);
   if (filters.from)          add('created_at >= ?', filters.from);
   if (filters.to)            add('created_at <= ?', filters.to);
   if (filters.q) {

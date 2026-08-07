@@ -17,6 +17,7 @@ export default function SettingsPage() {
   const [settingsMsg, setSettingsMsg] = useState(null);
 
   const [newRep, setNewRep] = useState('');
+  const [newRepEmail, setNewRepEmail] = useState('');
   const [savingRep, setSavingRep] = useState(false);
 
   const [tags, setTags] = useState([]);
@@ -74,8 +75,9 @@ export default function SettingsPage() {
     if (!newRep.trim()) return;
     setSavingRep(true);
     try {
-      await api('/reps', { method: 'POST', body: JSON.stringify({ name: newRep.trim() }) });
+      await api('/reps', { method: 'POST', body: JSON.stringify({ name: newRep.trim(), email: newRepEmail.trim() || undefined }) });
       setNewRep('');
+      setNewRepEmail('');
       const r = await api('/reps');
       setReps(r.reps || []);
     } catch (e) { setLoadError(e.message); }
@@ -86,6 +88,19 @@ export default function SettingsPage() {
     try {
       await api('/reps/' + rep.id, { method: 'PATCH', body: JSON.stringify({ is_active: !rep.is_active }) });
       setReps(reps.map(r => r.id === rep.id ? { ...r, is_active: !rep.is_active } : r));
+    } catch (e) { setLoadError(e.message); }
+  }
+
+  // Email is used to pick this rep on the Leads page's "Assigned" column —
+  // saved on blur rather than a separate Save button, same lightweight
+  // pattern the rest of this page uses for inline edits.
+  async function updateRepEmail(rep, rawEmail) {
+    const clean = rawEmail.trim();
+    if (clean === (rep.email || '')) return;
+    try {
+      const r = await api('/reps/' + rep.id, { method: 'PATCH', body: JSON.stringify({ email: clean || null }) });
+      if (!r.ok) { setLoadError(r.error); return; }
+      setReps(prev => prev.map(x => x.id === rep.id ? r.rep : x));
     } catch (e) { setLoadError(e.message); }
   }
 
@@ -220,16 +235,20 @@ export default function SettingsPage() {
       <div className="card" style={{ marginBottom: 24 }}>
         <p className="muted" style={{ margin: '0 0 12px' }}>
           The shared list "Acting as" picks from in the sidebar, so activity and the leaderboard attribute
-          consistently instead of depending on how someone happens to type their name.
+          consistently instead of depending on how someone happens to type their name. A rep's email is optional,
+          but only reps with one set can be picked in the Leads table's "Assigned" column.
         </p>
         {reps.length === 0 ? (
           <p className="muted" style={{ margin: '0 0 12px' }}>No reps yet — add the first one below.</p>
         ) : (
           <div style={{ marginBottom: 14 }}>
             {reps.map(r => (
-              <div key={r.id} className="list-row" style={{ justifyContent: 'space-between' }}>
-                <span>{r.name}</span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
+              <div key={r.id} className="list-row" style={{ justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ flex: '0 0 auto' }}>{r.name}</span>
+                <input type="email" defaultValue={r.email || ''} placeholder="email (for assignment)"
+                       onBlur={e => updateRepEmail(r, e.target.value)}
+                       style={{ flex: 1, fontSize: 12, padding: '5px 8px' }} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)', flex: '0 0 auto' }}>
                   <input type="checkbox" checked={r.is_active} onChange={() => toggleRep(r)} />
                   Active
                 </label>
@@ -239,6 +258,7 @@ export default function SettingsPage() {
         )}
         <form onSubmit={addRep} style={{ display: 'flex', gap: 8 }}>
           <input value={newRep} onChange={e => setNewRep(e.target.value)} placeholder="Rep name" style={{ flex: 1 }} />
+          <input type="email" value={newRepEmail} onChange={e => setNewRepEmail(e.target.value)} placeholder="Email (optional)" style={{ flex: 1 }} />
           <button className="primary" type="submit" disabled={savingRep || !newRep.trim()}>Add rep</button>
         </form>
       </div>

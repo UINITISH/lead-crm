@@ -14,23 +14,24 @@ export async function listReps(businessId, { activeOnly = false } = {}) {
   return res.rows;
 }
 
-export async function createRep(businessId, name) {
+export async function createRep(businessId, name, email = null) {
   const clean = String(name || '').trim();
   if (!clean) throw new Error('name is required');
   const existing = await one(`SELECT * FROM reps WHERE business_id = $1 AND LOWER(name) = LOWER($2)`, [businessId, clean]);
   if (existing) return existing;
   const res = await query(
-    `INSERT INTO reps (business_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING *`,
-    [businessId, clean],
+    `INSERT INTO reps (business_id, name, email, is_active) VALUES ($1, $2, $3, TRUE) RETURNING *`,
+    [businessId, clean, email || null],
   );
   return res.rows[0];
 }
 
-export async function updateRep(businessId, id, { name, is_active } = {}) {
+export async function updateRep(businessId, id, { name, email, is_active } = {}) {
   const sets = [];
   const params = [];
   let i = 1;
   if (name !== undefined) { sets.push(`name = $${i++}`); params.push(String(name).trim()); }
+  if (email !== undefined) { sets.push(`email = $${i++}`); params.push(email || null); }
   if (is_active !== undefined) { sets.push(`is_active = $${i++}`); params.push(Boolean(is_active)); }
   if (!sets.length) return one(`SELECT * FROM reps WHERE id = $1 AND business_id = $2`, [id, businessId]);
   params.push(id, businessId);
