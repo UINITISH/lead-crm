@@ -51,7 +51,6 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
 
   const total = leads.length;
   const bySource = (s) => leads.filter(l => l.source === s).length;
-  const manual = leads.filter(l => l.entry_method === 'manual').length;
 
   // Table/card rows are paginated client-side — the leads array here is
   // already the full filtered set (fetched once), so "page 2" is just a
@@ -110,7 +109,6 @@ export default function LeadsPage({ leads, report, filters, setFilters, loading,
         <div className="card"><div className="n" style={{ color: '#1a56db' }}>{bySource('meta')}</div><div className="l">Meta</div></div>
         <div className="card"><div className="n" style={{ color: 'var(--warn)' }}>{bySource('google')}</div><div className="l">Google</div></div>
         <div className="card"><div className="n" style={{ color: 'var(--good)' }}>{bySource('website')}</div><div className="l">Website</div></div>
-        <div className="card"><div className="n" style={{ color: 'var(--pro)' }}>{manual}</div><div className="l">Manual entries</div></div>
       </div>
 
       <h2>
