@@ -150,17 +150,17 @@ export async function getBusiness(id) {
 async function resolveLogin(email) {
   const business = await findBusinessByEmail(email);
   if (business) {
-    return { business, loginId: null, passwordHash: business.password_hash, loginHiddenPages: [] };
+    return { business, loginId: null, loginEmail: business.email, passwordHash: business.password_hash, loginHiddenPages: [] };
   }
   const row = await one(
-    `SELECT bl.id AS login_id, bl.password_hash AS login_password_hash, bl.hidden_pages AS login_hidden_pages, b.*
+    `SELECT bl.id AS login_id, bl.email AS login_email, bl.password_hash AS login_password_hash, bl.hidden_pages AS login_hidden_pages, b.*
        FROM business_logins bl JOIN businesses b ON b.id = bl.business_id
       WHERE LOWER(bl.email) = LOWER($1)`,
     [email],
   );
   if (!row) return null;
-  const { login_id, login_password_hash, login_hidden_pages, ...business2 } = row;
-  return { business: business2, loginId: login_id, passwordHash: login_password_hash, loginHiddenPages: login_hidden_pages || [] };
+  const { login_id, login_email, login_password_hash, login_hidden_pages, ...business2 } = row;
+  return { business: business2, loginId: login_id, loginEmail: login_email, passwordHash: login_password_hash, loginHiddenPages: login_hidden_pages || [] };
 }
 
 /**
@@ -181,16 +181,23 @@ function mergeHiddenPages(businessHiddenPages, loginHiddenPages) {
  * same business_id and therefore the exact same leads/data. Whoever logs in
  * with either credential ends up looking at one shared account's data, on
  * purpose — but hidden_pages can still differ per login (see
- * mergeHiddenPages), so a colleague's login can be restricted without
- * touching the business owner's own primary login.
+ * mergeHiddenPages), and the returned `email` reflects the ACTUAL login used
+ * (not always the business's primary one), so the sidebar can show whoever
+ * is really signed in rather than always the business owner's address.
  */
 export async function authenticateBusiness(email, password) {
   const resolved = await resolveLogin(email);
   if (!resolved) return null;
-  const { business, loginId, passwordHash, loginHiddenPages } = resolved;
+  const { business, loginId, loginEmail, passwordHash, loginHiddenPages } = resolved;
   if (!business.is_active || !passwordHash || !verifyPassword(password, passwordHash)) return null;
-  const { password_hash, hidden_pages, ...safe } = business;
-  return { ...safe, login_id: loginId, hidden_pages: mergeHiddenPages(hidden_pages, loginHiddenPages) };
+  const { password_hash, hidden_pages, email: primaryEmail, ...safe } = business;
+  return {
+    ...safe,
+    email: loginEmail,
+    primary_email: primaryEmail,
+    login_id: loginId,
+    hidden_pages: mergeHiddenPages(hidden_pages, loginHiddenPages),
+  };
 }
 
 /**
