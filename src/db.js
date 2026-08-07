@@ -11,6 +11,32 @@ import pg from 'pg';
 
 let impl = null;
 
+/**
+ * A fresh deploy invalidates every warm Lambda instance, so the next burst of
+ * page-load traffic (a dozen-plus parallel API calls per page load, times
+ * however many people have the CRM open) cold-starts many instances at once,
+ * each opening its own connection pool against the same small Render Postgres
+ * plan. That's routinely enough to blow past Render's connection cap for a
+ * few seconds, which shows up as "Connection terminated unexpectedly" (the
+ * pool's own health check or a live query got dropped) or a spurious
+ * "deadlock detected" on a plain read (lock manager thrashing under
+ * connection churn, not an actual conflicting write). Both are transient —
+ * gone within a second or two once the burst settles — so retrying briefly
+ * turns them into a barely-noticeable delay instead of a 500 in the UI.
+ */
+const TRANSIENT_ERROR = /Connection terminated|ECONNRESET|ETIMEDOUT|deadlock detected|terminating connection/i;
+
+async function withRetry(fn, { retries = 3, baseDelayMs = 200 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= retries || !TRANSIENT_ERROR.test(String(err?.message || ''))) throw err;
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * (attempt + 1)));
+    }
+  }
+}
+
 export async function initDb() {
   if (impl) return impl;
 
@@ -25,14 +51,22 @@ export async function initDb() {
     const pool = new pg.Pool({
       connectionString: url,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      max: 10,
+      // Kept deliberately small: a fresh deploy can cold-start many Lambda
+      // instances at once, and it's (instance count × max) connections
+      // hitting Render at the same moment that exhausts its connection cap,
+      // not steady-state traffic. A lower per-instance ceiling means more
+      // instances can cold-start concurrently before that happens.
+      max: 4,
       idleTimeoutMillis: 30_000,
+      // Fail fast and let withRetry() try again with backoff, rather than
+      // queuing silently until Vercel's own 30s function timeout fires.
+      connectionTimeoutMillis: 8_000,
     });
-    await pool.query('SELECT 1');
+    await withRetry(() => pool.query('SELECT 1'));
     impl = {
       kind: 'postgres',
-      query: (text, params = []) => pool.query(text, params),
-      exec: (sql) => pool.query(sql),          // multi-statement script
+      query: (text, params = []) => withRetry(() => pool.query(text, params)),
+      exec: (sql) => withRetry(() => pool.query(sql)),          // multi-statement script
       close: () => pool.end(),
     };
   } else {
