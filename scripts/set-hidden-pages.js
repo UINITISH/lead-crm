@@ -23,11 +23,13 @@
  *   Feature-within-a-page: add_lead (the manual "Add Lead" button on Leads),
  *                      edit_lead (the "Edit lead" option in the ⋮ menu —
  *                      inline Tag/Assigned edits in the table still work,
- *                      just not the full editor panel). The Leads page
- *                      itself stays visible either way.
+ *                      just not the full editor panel), recent_activity
+ *                      (the "Recent activity" card on the Dashboard).
+ *                      Their host pages (Leads / Dashboard) stay visible
+ *                      either way — only the one feature is hidden.
  *
  * Usage:
- *   node scripts/set-hidden-pages.js --email colleague@client.com --hide settings,forms,ingest,add_lead,edit_lead --confirm
+ *   node scripts/set-hidden-pages.js --email colleague@client.com --hide settings,forms,ingest,add_lead,edit_lead,recent_activity --confirm
  *   node scripts/set-hidden-pages.js --email colleague@client.com --hide none --confirm   (clears that login's own restrictions)
  *
  * Re-running replaces the full restriction list for whichever login/business
@@ -38,7 +40,7 @@ import 'dotenv/config';
 import { initDb, closeDb } from '../src/db.js';
 import { findLoginByEmail, setHiddenPages, setLoginHiddenPages } from '../src/auth.js';
 
-const HIDEABLE_PAGES = ['leads', 'tickets', 'forms', 'ingest', 'settings', 'help', 'add_lead', 'edit_lead'];
+const HIDEABLE_PAGES = ['leads', 'tickets', 'forms', 'ingest', 'settings', 'help', 'add_lead', 'edit_lead', 'recent_activity'];
 
 function parseArgs(argv) {
   const out = { confirm: false };

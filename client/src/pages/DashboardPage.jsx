@@ -7,10 +7,11 @@ import ActivityFeed from '../components/ActivityFeed.jsx';
 import Leaderboard from '../components/Leaderboard.jsx';
 import UpcomingFollowups from '../components/UpcomingFollowups.jsx';
 import ValueChart from '../components/ValueChart.jsx';
-import { api } from '../lib/api.js';
+import { api, business } from '../lib/api.js';
 import { fmtINR } from '../lib/format.js';
 
 export default function DashboardPage({ leads, report, load, actingAs }) {
+  const canSeeRecentActivity = !(business()?.hidden_pages || []).includes('recent_activity');
   const [stats, setStats] = useState(null);
   const [activity, setActivity] = useState([]);
   const [board, setBoard] = useState([]);
@@ -22,13 +23,15 @@ export default function DashboardPage({ leads, report, load, actingAs }) {
     setLoading(true);
     try {
       const [s, a, b, f] = await Promise.all([
-        api('/dashboard-stats'), api('/activity?limit=8'), api('/leaderboard'), api('/followups?limit=6'),
+        api('/dashboard-stats'),
+        canSeeRecentActivity ? api('/activity?limit=8') : Promise.resolve({ activity: [] }),
+        api('/leaderboard'), api('/followups?limit=6'),
       ]);
       setStats(s.stats); setActivity(a.activity || []); setBoard(b.leaderboard || []); setFollowups(f.followups || []);
       setLoadError(null);
     } catch (e) { setLoadError(e.message); }
     setLoading(false);
-  }, []);
+  }, [canSeeRecentActivity]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -75,16 +78,23 @@ export default function DashboardPage({ leads, report, load, actingAs }) {
             </div>
           </div>
 
-          <div className="grid2" style={{ marginBottom: 20 }}>
-            <div>
-              <h2>Recent activity</h2>
-              <ActivityFeed items={activity} />
+          {canSeeRecentActivity ? (
+            <div className="grid2" style={{ marginBottom: 20 }}>
+              <div>
+                <h2>Recent activity</h2>
+                <ActivityFeed items={activity} />
+              </div>
+              <div>
+                <h2>Rep leaderboard</h2>
+                <Leaderboard rows={board} />
+              </div>
             </div>
-            <div>
+          ) : (
+            <div style={{ marginBottom: 20 }}>
               <h2>Rep leaderboard</h2>
               <Leaderboard rows={board} />
             </div>
-          </div>
+          )}
 
           <div className="grid2" style={{ marginBottom: 20 }}>
             <div>

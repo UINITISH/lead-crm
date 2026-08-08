@@ -140,6 +140,7 @@ adminRouter.use(async (req, res, next) => {
  * "Add Lead" button on the Leads page, which itself is never hideable).
  * 'edit_lead' is handled separately, inline in PATCH /leads/:id below,
  * since it only blocks SOME of that route's fields, not the whole route.
+ * 'recent_activity' hides the Dashboard's "Recent activity" card.
  * Deliberately NOT applied to shared endpoints like /reps or /tags GET,
  * which other pages (the "Acting as" picker, the tag dropdown on every
  * lead) also depend on even when the Settings page itself is hidden.
@@ -287,8 +288,13 @@ adminRouter.post('/projects', async (req, res) => {
   res.status(201).json({ ok: true, project });
 });
 
-/** Dashboard activity feed: recent lifecycle events across every lead. */
-adminRouter.get('/activity', async (req, res) => {
+/**
+ * Dashboard activity feed: recent lifecycle events across every lead.
+ * Gated by 'recent_activity' — only the Dashboard's "Recent activity" card
+ * calls this, nothing else depends on it, so it's safe to block outright
+ * (unlike edit_lead, which shares a route with other, non-hideable actions).
+ */
+adminRouter.get('/activity', blockIfHidden('recent_activity'), async (req, res) => {
   res.json({ ok: true, activity: await listRecentActivity(req.business_id, { limit: req.query.limit }) });
 });
 
